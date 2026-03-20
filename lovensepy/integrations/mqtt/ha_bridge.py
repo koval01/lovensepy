@@ -55,7 +55,7 @@ def _normalize_toy_dict_from_event(toy: dict[str, Any]) -> dict[str, Any]:
     return d
 
 
-def _parse_toy_list_data(data: Any) -> list[dict[str, Any]]:
+def _parse_toy_list_data(data: Any) -> list[dict[str, Any]]:  # pylint: disable=too-many-return-statements
     """Normalize toy-list / GetToys-like payloads into toy dicts."""
     if data is None:
         return []
@@ -230,6 +230,7 @@ class HAMqttBridge:
 
     @property
     def availability_topic(self) -> str:
+        """MQTT availability topic used by all published entities."""
         return default_availability_topic(self._topic_prefix)
 
     def _mqtt_signal_connected(self) -> None:
@@ -242,6 +243,7 @@ class HAMqttBridge:
         loop = self._loop
         ev = self._mqtt_ready
         if loop is not None and ev is not None:
+
             def _clear() -> None:
                 ev.clear()
 
@@ -257,7 +259,7 @@ class HAMqttBridge:
                 fut.result()
             except asyncio.CancelledError:
                 pass
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 _logger.exception("HAMqttBridge async task failed")
 
         fut = asyncio.run_coroutine_threadsafe(coro, loop)
@@ -333,7 +335,7 @@ class HAMqttBridge:
                     qos=0,
                     retain=True,
                 )
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 _logger.exception("Failed to publish MQTT offline")
             self._mqtt.loop_stop()
             self._mqtt.disconnect()
@@ -350,10 +352,10 @@ class HAMqttBridge:
     def _on_connect(
         self,
         client: Any,
-        userdata: Any,
-        flags: Any,
+        _userdata: Any,
+        _flags: Any,
         reason_code: Any,
-        properties: Any,
+        _properties: Any,
     ) -> None:
         try:
             failed = reason_code.is_failure  # type: ignore[union-attr]
@@ -372,22 +374,23 @@ class HAMqttBridge:
                 qos=0,
                 retain=True,
             )
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             _logger.exception("Failed to publish bridge online")
         self._mqtt_signal_connected()
         self._schedule(self._refresh_toys_and_discovery())
 
     def _on_disconnect(
         self,
-        client: Any,
-        userdata: Any,
+        _client: Any,
+        _userdata: Any,
+        _disconnect_flags: Any,
         reason_code: Any,
-        properties: Any,
+        _properties: Any,
     ) -> None:
         _logger.warning("MQTT disconnected: %s", reason_code)
         self._mqtt_signal_disconnected()
 
-    def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+    def _on_message(self, _client: Any, _userdata: Any, msg: Any) -> None:
         topic = getattr(msg, "topic", "")
         payload = getattr(msg, "payload", b"") or b""
         self._schedule(self._handle_command_topic(topic, payload))
@@ -398,8 +401,8 @@ class HAMqttBridge:
             try:
                 await self._refresh_toys_and_discovery()
             except asyncio.CancelledError:
-                raise
-            except Exception:
+                break
+            except Exception:  # pylint: disable=broad-exception-caught
                 _logger.exception("Periodic toy refresh failed")
 
     async def _toy_events_loop(self) -> None:
@@ -419,7 +422,7 @@ class HAMqttBridge:
                 await self._toy_client.connect()
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 _logger.exception("Toy Events connection ended with error")
             finally:
                 if self._toy_client:
@@ -472,10 +475,10 @@ class HAMqttBridge:
             if not strengths:
                 return
             toy = self._toys.get(safe) or {"id": tid}
-            for action in features_for_toy(toy):
-                if action in strengths:
+            supported = set(features_for_toy(toy))
+            for action, raw in strengths.items():
+                if action in supported:
                     seg = feature_topic_segment(action)
-                    raw = strengths[action]
                     clamped = _clamp_feature(action, float(raw))
                     await self._publish_state_str(safe, seg, str(int(clamped)))
 
@@ -485,7 +488,7 @@ class HAMqttBridge:
         async with self._lock:
             try:
                 resp = await self._lan.get_toys()
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 _logger.exception("GetToys failed")
                 return
             data = resp.data
@@ -551,6 +554,7 @@ class HAMqttBridge:
         self._mqtt.publish(topic, value, qos=0, retain=mqtt_retain)
 
     async def _handle_command_topic(self, topic: str, payload: bytes) -> None:
+        # pylint: disable=too-many-return-statements
         pfx = self._topic_prefix
         if not topic.startswith(pfx + "/"):
             return
@@ -605,5 +609,5 @@ class HAMqttBridge:
             level_i = int(_clamp_feature(action, level))
             await self._lan.function_request({action: level_i}, toy_id=toy_id)
             await self._publish_state_str(safe_id, feature_segment, str(level_i), force=True)
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             _logger.exception("Command failed topic=%s", topic)
