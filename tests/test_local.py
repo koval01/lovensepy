@@ -11,7 +11,6 @@ import pytest
 from lovensepy import (
     Actions,
     LANClient,
-    LovenseError,
     Presets,
     SyncPatternPlayer,
 )
@@ -22,6 +21,7 @@ from tests.helpers.lan_scenarios import (
     run_lan_function_demo,
     run_sync_pattern_player_demo,
 )
+from tests.helpers.test_utils import assert_has_code, call_or_skip
 
 
 def _log(msg: str) -> None:
@@ -40,54 +40,36 @@ class TestLANClient:
 
     def test_get_toys(self, client):
         """API should return toys info (or empty if none connected)."""
-        try:
-            resp = client.get_toys()
-        except LovenseError as e:
-            pytest.skip(f"Network error: {e}")
-        assert resp.code is not None
+        resp = call_or_skip(client.get_toys)
+        assert_has_code(resp)
         assert resp.type is not None
 
     def test_get_toys_name(self, client):
         """API should return toy names."""
-        try:
-            resp = client.get_toys_name()
-        except LovenseError as e:
-            pytest.skip(f"Network error: {e}")
-        assert resp.code is not None
+        resp = call_or_skip(client.get_toys_name)
+        assert_has_code(resp)
         assert resp.type is not None
 
     def test_function_and_stop(self, client):
         """Send function then stop."""
-        try:
-            r1 = client.function_request({Actions.ALL: 2}, time=2)
-            r2 = client.stop()
-        except LovenseError as e:
-            pytest.skip(f"Network error: {e}")
-        assert r1.code is not None
-        assert r2.code is not None
+        function_resp = call_or_skip(lambda: client.function_request({Actions.ALL: 2}, time=2))
+        stop_resp = call_or_skip(client.stop)
+        assert_has_code(function_resp)
+        assert_has_code(stop_resp)
 
     def test_preset_request(self, client):
         """Send preset for short duration."""
-        try:
-            resp = client.preset_request(Presets.PULSE, time=2)
-        except LovenseError as e:
-            pytest.skip(f"Network error: {e}")
-        assert resp.code is not None
+        resp = call_or_skip(lambda: client.preset_request(Presets.PULSE, time=2))
+        assert_has_code(resp)
 
     def test_pattern_request(self, client):
         """Send pattern."""
-        try:
-            resp = client.pattern_request([5, 10, 15], time=2)
-        except LovenseError as e:
-            pytest.skip(f"Network error: {e}")
-        assert resp.code is not None
+        resp = call_or_skip(lambda: client.pattern_request([5, 10, 15], time=2))
+        assert_has_code(resp)
 
     def test_decode_response(self, client):
         """decode_response formats response string."""
-        try:
-            resp = client.get_toys()
-        except LovenseError as e:
-            pytest.skip(f"Network error: {e}")
+        resp = call_or_skip(client.get_toys)
         s = client.decode_response(resp)
         assert isinstance(s, str)
         assert len(s) > 0
@@ -103,11 +85,7 @@ def test_full_flow():
     port = int(os.environ.get("LOVENSE_LAN_PORT", "20011"))
     client = LANClient("lovensepy_test", ip, port=port)
 
-    try:
-        resp = client.get_toys()
-    except LovenseError as e:
-        pytest.skip(f"Network error: {e}")
-
+    resp = call_or_skip(client.get_toys)
     toys = parse_lan_toys(resp)
     assert toys, "No toys — connect toys to Lovense Remote Game Mode"
 
@@ -120,7 +98,7 @@ def test_sync_pattern_player_flow():
     LAN + SyncPatternPlayer flow: get toys, run per-motor waves and combos, stop all.
     """
     client = build_lan_client_from_env("lovensepy_local_only")
-    resp = client.get_toys()
+    resp = call_or_skip(client.get_toys)
     toys = parse_lan_toys(resp)
     assert toys, "No toys — connect toys to Lovense Remote, enable Game Mode, same LAN"
 

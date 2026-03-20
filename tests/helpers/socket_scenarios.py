@@ -26,6 +26,191 @@ def _build_toy_feature_sequence(toys: dict[str, Any]) -> list[tuple[str, str]]:
     return sequence
 
 
+def _stop_action_for_toy(toys: dict[str, Any], toy_id: str) -> str:
+    return ",".join(f"{feature}:0" for feature in features_for_toy(toys[toy_id]))
+
+
+def _toy_targets(toys: dict[str, Any]) -> list[tuple[str, str]]:
+    return [(toy_id, feature) for toy_id, toy in toys.items() for feature in features_for_toy(toy)]
+
+
+def _announce_wave_step(
+    toys: dict[str, Any],
+    toy_id: str,
+    feature: str,
+    index: int,
+    total: int,
+    log_fn: Callable[[str], None],
+) -> None:
+    toy_name = toys[toy_id].get("name") or toy_id
+    log_fn(f"    [{index}/{total}] {toy_name} — {feature}")
+
+
+async def _play_sine_feature(
+    client: SocketAPIClient,
+    toys: dict[str, Any],
+    toy_id: str,
+    feature: str,
+    *,
+    duration_sec: float,
+    num_steps: int,
+    stop_prev_first: bool,
+) -> None:
+    interval_sec = duration_sec / num_steps
+    stop_prev = stop_prev_first
+    for i in range(num_steps + 1):
+        t = (i / num_steps) * duration_sec
+        level = max(0, min(20, int(10 + 10 * math.sin(math.pi * t))))
+        client.send_command(
+            "Function",
+            f"{feature}:{level}",
+            time_sec=0,
+            toy=toy_id,
+            stop_previous=1 if stop_prev else 0,
+        )
+        stop_prev = False
+        await asyncio.sleep(interval_sec)
+
+    await asyncio.sleep(0.15)
+    await client.send_command_await(
+        "Function",
+        _stop_action_for_toy(toys, toy_id),
+        time_sec=0,
+        toy=toy_id,
+    )
+
+
+async def _play_sine_combo(
+    client: SocketAPIClient,
+    toys: dict[str, Any],
+    targets: list[tuple[str, str]],
+    *,
+    duration_sec: float,
+    num_steps: int,
+) -> None:
+    rng = secrets.SystemRandom()
+    phases = {target: rng.uniform(0, 2 * math.pi) for target in targets}
+    by_toy: dict[str, list[str]] = {}
+    for toy_id, feature in targets:
+        by_toy.setdefault(toy_id, []).append(feature)
+
+    interval = duration_sec / num_steps
+    last_toy_id: str | None = None
+    for i in range(num_steps + 1):
+        t_norm = i / num_steps
+        levels = {
+            (toy_id, feature): max(
+                0,
+                min(20, int(10 + 10 * math.sin(math.pi * t_norm + phases[(toy_id, feature)]))),
+            )
+            for toy_id, feature in targets
+        }
+        for toy_id, features in by_toy.items():
+            action = ",".join(f"{feature}:{levels[(toy_id, feature)]}" for feature in features)
+            stop_prev = toy_id != last_toy_id
+            client.send_command(
+                "Function",
+                action,
+                time_sec=0,
+                toy=toy_id,
+                stop_previous=1 if stop_prev else 0,
+            )
+            last_toy_id = toy_id
+        await asyncio.sleep(interval)
+
+    await asyncio.sleep(0.15)
+    for toy_id in by_toy:
+        await client.send_command_await(
+            "Function",
+            _stop_action_for_toy(toys, toy_id),
+            time_sec=0,
+            toy=toy_id,
+        )
+
+
+async def _play_per_feature_wave(
+    client: SocketAPIClient,
+    toys: dict[str, Any],
+    sequence: list[tuple[str, str]],
+    *,
+    feature_duration_sec: float,
+    num_steps: int,
+    log_fn: Callable[[str], None],
+) -> None:
+    log_fn(f"\n>>> 1. Per-motor sine wave ({feature_duration_sec}s each) — {len(sequence)} steps:")
+    last_toy_id: str | None = None
+    for index, (toy_id, feature) in enumerate(sequence, start=1):
+        _announce_wave_step(toys, toy_id, feature, index, len(sequence), log_fn)
+        await _play_sine_feature(
+            client,
+            toys,
+            toy_id,
+            feature,
+            duration_sec=feature_duration_sec,
+            num_steps=num_steps,
+            stop_prev_first=(toy_id != last_toy_id),
+        )
+        last_toy_id = toy_id
+        await asyncio.sleep(0.3)
+
+
+async def _play_combo_phases(
+    client: SocketAPIClient,
+    toys: dict[str, Any],
+    *,
+    combo_duration_sec: float,
+    num_steps: int,
+    log_fn: Callable[[str], None],
+) -> None:
+    all_targets = _toy_targets(toys)
+    if len(all_targets) < 2:
+        return
+
+    toy_list = list(toys.items())
+    two_motor_toys = [(toy_id, toy) for toy_id, toy in toys.items() if len(features_for_toy(toy)) >= 2]
+    if two_motor_toys:
+        toy_id, toy = two_motor_toys[0]
+        features = features_for_toy(toy)[:2]
+        log_fn(
+            f"\n>>> 2. Two motors together ({toy.get('name') or toy_id}: {features}) — "
+            f"{combo_duration_sec}s, random phases:"
+        )
+        await _play_sine_combo(
+            client,
+            toys,
+            [(toy_id, feature) for feature in features],
+            duration_sec=combo_duration_sec,
+            num_steps=num_steps,
+        )
+        await asyncio.sleep(0.5)
+
+    if len(toy_list) >= 2:
+        (toy1_id, toy1), (toy2_id, toy2) = toy_list[:2]
+        targets = [(toy1_id, features_for_toy(toy1)[0]), (toy2_id, features_for_toy(toy2)[0])]
+        log_fn(
+            f"\n>>> 3. Two toys together ({toy1.get('name') or toy1_id}, {toy2.get('name') or toy2_id}) — "
+            f"{combo_duration_sec}s, random phases:"
+        )
+        await _play_sine_combo(
+            client,
+            toys,
+            targets,
+            duration_sec=combo_duration_sec,
+            num_steps=num_steps,
+        )
+        await asyncio.sleep(0.5)
+
+    log_fn(f"\n>>> 4. All motors together — {combo_duration_sec}s, random phases:")
+    await _play_sine_combo(
+        client,
+        toys,
+        all_targets,
+        duration_sec=combo_duration_sec,
+        num_steps=num_steps,
+    )
+    await asyncio.sleep(0.5)
+
+
 async def run_socket_function_demo(
     client: SocketAPIClient,
     toys: dict[str, Any],
@@ -36,130 +221,30 @@ async def run_socket_function_demo(
     log_fn: Callable[[str], None] = log,
 ) -> None:
     """Sine wave + combos demo executed via SocketAPIClient.send_command calls."""
-
     sequence = _build_toy_feature_sequence(toys)
-    log_fn(
-        f"\n>>> 1. Per-motor sine wave ({feature_duration_sec}s each) — {len(sequence)} steps:"
+    await _play_per_feature_wave(
+        client,
+        toys,
+        sequence,
+        feature_duration_sec=feature_duration_sec,
+        num_steps=num_steps,
+        log_fn=log_fn,
+    )
+    await _play_combo_phases(
+        client,
+        toys,
+        combo_duration_sec=combo_duration_sec,
+        num_steps=num_steps,
+        log_fn=log_fn,
     )
 
-    def stop_all_features_of_toy(toy_id: str) -> str:
-        feats = features_for_toy(toys[toy_id])
-        return ",".join(f"{f}:0" for f in feats)
-
-    interval_sec = feature_duration_sec / num_steps
-
-    async def send_sine_for_feature(
-        toy_id: str,
-        feature: str,
-        stop_prev_first: bool = True,
-    ) -> None:
-        stop_prev = stop_prev_first
-        for i in range(num_steps + 1):
-            t = (i / num_steps) * feature_duration_sec
-            level = int(10 + 10 * math.sin(math.pi * t))
-            level = max(0, min(20, level))
-            client.send_command(
-                "Function",
-                f"{feature}:{level}",
-                time_sec=0,
-                toy=toy_id,
-                stop_previous=1 if stop_prev else 0,
-            )
-            stop_prev = False
-            await asyncio.sleep(interval_sec)
-        await asyncio.sleep(0.15)
-        action = stop_all_features_of_toy(toy_id)
-        await client.send_command_await("Function", action, time_sec=0, toy=toy_id)
-
-    rng = secrets.SystemRandom()
-
-    async def send_sine_combo(
-        targets: list[tuple[str, str]],
-        duration_sec: float,
-    ) -> None:
-        phases = {t: rng.uniform(0, 2 * math.pi) for t in targets}
-        by_toy: dict[str, list[str]] = {}
-        for tid, feat in targets:
-            by_toy.setdefault(tid, []).append(feat)
-
-        num_local_steps = num_steps
-        interval = duration_sec / num_local_steps
-        last_tid_combo: str | None = None
-
-        for i in range(num_local_steps + 1):
-            t_norm = i / num_local_steps
-            levels: dict[tuple[str, str], int] = {}
-            for tid, feat in targets:
-                phase = phases[(tid, feat)]
-                level = 10 + 10 * math.sin(math.pi * t_norm + phase)
-                levels[(tid, feat)] = max(0, min(20, int(level)))
-
-            for tid, feats in by_toy.items():
-                action = ",".join(f"{f}:{levels[(tid, f)]}" for f in feats)
-                stop_prev = tid != last_tid_combo
-                client.send_command(
-                    "Function",
-                    action,
-                    time_sec=0,
-                    toy=tid,
-                    stop_previous=1 if stop_prev else 0,
-                )
-                last_tid_combo = tid
-
-            await asyncio.sleep(interval)
-
-        await asyncio.sleep(0.15)
-        for tid in by_toy:
-            action = stop_all_features_of_toy(tid)
-            await client.send_command_await("Function", action, time_sec=0, toy=tid)
-
-    last_tid: str | None = None
-    for idx, (tid, feat) in enumerate(sequence):
-        toy = toys[tid]
-        name = toy.get("name") or tid
-        log_fn(f"    [{idx + 1}/{len(sequence)}] {name} — {feat}")
-        await send_sine_for_feature(tid, feat, stop_prev_first=(tid != last_tid))
-        last_tid = tid
-        await asyncio.sleep(0.3)
-
-    combo_duration = combo_duration_sec
-    toy_list = list(toys.items())
-    all_targets = [(tid, f) for tid, t in toys.items() for f in features_for_toy(t)]
-
-    if len(all_targets) >= 2:
-        two_motor_toys = [(tid, t) for tid, t in toys.items() if len(features_for_toy(t)) >= 2]
-        if two_motor_toys:
-            tid, t = two_motor_toys[0]
-            feats = features_for_toy(t)[:2]
-            targets_2m = [(tid, f) for f in feats]
-            name = t.get("name") or tid
-            log_fn(
-                f"\n>>> 2. Two motors together ({name}: {feats}) — "
-                f"{combo_duration}s, random phases:"
-            )
-            await send_sine_combo(targets_2m, combo_duration)
-            await asyncio.sleep(0.5)
-
-        if len(toy_list) >= 2:
-            t1_id, t1 = toy_list[0]
-            t2_id, t2 = toy_list[1]
-            f1, f2 = features_for_toy(t1)[0], features_for_toy(t2)[0]
-            n1, n2 = t1.get("name") or t1_id, t2.get("name") or t2_id
-            log_fn(
-                f"\n>>> 3. Two toys together ({n1}, {n2}) — "
-                f"{combo_duration}s, random phases:"
-            )
-            targets_2t = [(t1_id, f1), (t2_id, f2)]
-            await send_sine_combo(targets_2t, combo_duration)
-            await asyncio.sleep(0.5)
-
-        log_fn(f"\n>>> 4. All motors together — {combo_duration}s, random phases:")
-        await send_sine_combo(all_targets, combo_duration)
-        await asyncio.sleep(0.5)
-
     await asyncio.sleep(0.2)
-    for tid in toys:
-        action = stop_all_features_of_toy(tid)
-        await client.send_command_await("Function", action, time_sec=0, toy=tid)
+    for toy_id in toys:
+        await client.send_command_await(
+            "Function",
+            _stop_action_for_toy(toys, toy_id),
+            time_sec=0,
+            toy=toy_id,
+        )
     log_fn(">>> Done.")
 

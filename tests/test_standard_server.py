@@ -15,9 +15,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from lovensepy import Actions, LovenseError, Presets, ServerClient, get_qr_code
+from lovensepy import Actions, Presets, ServerClient, get_qr_code
 from lovensepy.toy_utils import features_for_toy
 from tests.conftest import requires_socket
+from tests.helpers.test_utils import assert_has_code, call_or_skip, is_success_response
 
 # Shared state for callback receiver
 _callback_received: dict | None = None
@@ -126,42 +127,33 @@ class TestServerClient:
 
     def test_function_request(self, client):
         """Send vibrate command to toys (like LAN/Socket). With paired uid, toys respond."""
-        try:
-            resp = client.function_request({Actions.VIBRATE: 5}, time=3)
-        except LovenseError as e:
-            pytest.skip(f"Network error: {e}")
-        assert resp.code is not None
-        if resp.code == 200 or resp.result is True:
+        resp = call_or_skip(lambda: client.function_request({Actions.VIBRATE: 5}, time=3))
+        assert_has_code(resp)
+        if is_success_response(resp):
             print("  -> Vibrate:5 for 3s delivered to toys")
         elif resp.code == 503:
             print("  -> 503: uid not paired (scan QR with LOVENSE_QR_PAIRING=1)")
 
     def test_stop(self, client):
         """Send stop to all toys."""
-        try:
-            resp = client.stop()
-        except LovenseError as e:
-            pytest.skip(f"Network error: {e}")
-        assert resp.code is not None
-        if resp.code == 200 or resp.result is True:
+        resp = call_or_skip(client.stop)
+        assert_has_code(resp)
+        if is_success_response(resp):
             print("  -> Stop delivered")
 
     def test_control_flow(self, client):
         """Full control flow: vibrate → preset → stop (like Socket/LAN tests)."""
-        try:
-            resp = client.function_request({Actions.VIBRATE: 10}, time=3)
-        except LovenseError as e:
-            pytest.skip(f"Network error: {e}")
-        if resp.code not in (200,) and resp.result is not True:
-            pytest.skip(f"Need paired uid: {resp.message or resp}")
+        resp = call_or_skip(lambda: client.function_request({Actions.VIBRATE: 10}, time=3))
+        if not is_success_response(resp):
+            pytest.skip(f"Need paired uid: {getattr(resp, 'message', None) or resp}")
         print("  -> Vibrate:10 for 3s OK")
 
-        resp = client.preset_request(Presets.PULSE, time=2)
-        assert resp.code == 200 or resp.result is True, f"Preset failed: {resp}"
+        resp = call_or_skip(lambda: client.preset_request(Presets.PULSE, time=2))
+        assert is_success_response(resp), f"Preset failed: {resp}"
         print("  -> Preset pulse 2s OK")
 
-        resp = client.stop()
-        assert resp.code == 200 or resp.result is True, f"Stop failed: {resp}"
+        resp = call_or_skip(client.stop)
+        assert is_success_response(resp), f"Stop failed: {resp}"
         print("  -> Stop OK")
 
     def test_control_all_toys(self, client, paired_toys):
@@ -178,11 +170,8 @@ class TestServerClient:
             print(f"    {name} ({tid}): {feats}")
             for feat in feats:
                 action = {feat: 12}
-                try:
-                    resp = client.function_request(action, time=DURATION_SEC, toy_id=tid)
-                except LovenseError as e:
-                    pytest.skip(f"Network error: {e}")
-                if resp.code == 200 or resp.result is True:
+                resp = call_or_skip(lambda: client.function_request(action, time=DURATION_SEC, toy_id=tid))
+                if is_success_response(resp):
                     print(f"      -> {feat}:12 for {DURATION_SEC}s OK")
                 else:
                     print(f"      -> {feat} failed: {resp}")

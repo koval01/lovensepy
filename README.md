@@ -147,7 +147,7 @@ flowchart TB
 
 **Step 1:** Enable Game Mode in Lovense Remote
 - Open Lovense Remote > Discover > Game Mode > Enable LAN
-- Or Lovense Connect > Game Mode > Enable LAN
+- Or Lovense Connect > Scan QR > Other connection modes > IP Address
 
 **Step 2:** Note the IP and port
 - Lovense Remote: typically port **20011** (HTTP) or **30011** (HTTPS)

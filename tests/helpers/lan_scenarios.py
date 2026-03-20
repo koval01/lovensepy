@@ -66,6 +66,60 @@ def build_toy_feature_sequence(toys: dict[str, dict[str, Any]]) -> list[tuple[st
     return sequence
 
 
+def _toy_name(toy: dict[str, Any], fallback: str) -> str:
+    return toy.get("name") or toy.get("nickName") or fallback
+
+
+def _stop_all_features(toys: dict[str, dict[str, Any]], toy_id: str) -> dict[str, int]:
+    return {feature: 0 for feature in features_for_toy(toys[toy_id])}
+
+
+def _log_toy_inventory(
+    toys: dict[str, dict[str, Any]],
+    *,
+    header: str,
+    log_fn: Callable[[str], None],
+) -> None:
+    log_fn(header)
+    for toy_id, toy in toys.items():
+        name = _toy_name(toy, "—")
+        model = toy.get("toyType") or name
+        log_fn(f"    {toy_id}: {name} ({model}) — {features_for_toy(toy)}")
+
+
+def _play_player_sequence(
+    player: SyncPatternPlayer,
+    toys: dict[str, dict[str, Any]],
+    sequence: list[tuple[str, str]],
+    *,
+    feature_duration_sec: float,
+    log_fn: Callable[[str], None],
+) -> None:
+    log_fn(f"\n>>> 1. Per-motor sine wave ({feature_duration_sec}s each) — {len(sequence)} steps:")
+    last_toy_id: str | None = None
+    for index, (toy_id, feature) in enumerate(sequence, start=1):
+        log_fn(f"    [{index}/{len(sequence)}] {_toy_name(toys[toy_id], toy_id)} — {feature}")
+        player.play_sine_wave(
+            toy_id,
+            feature,
+            duration_sec=feature_duration_sec,
+            stop_prev_first=(toy_id != last_toy_id),
+        )
+        last_toy_id = toy_id
+        time.sleep(0.3)
+
+
+def _stop_player_for_all_toys(
+    player: SyncPatternPlayer,
+    toys: dict[str, dict[str, Any]],
+    *,
+    delay_sec: float = 0.2,
+) -> None:
+    time.sleep(delay_sec)
+    for toy_id in toys:
+        player.stop(toy_id)
+
+
 def run_sync_pattern_player_demo(
     player: SyncPatternPlayer,
     toys: dict[str, dict[str, Any]],
@@ -75,35 +129,24 @@ def run_sync_pattern_player_demo(
     log_fn: Callable[[str], None] = log,
 ) -> None:
     """Sine wave + combos demo executed via SyncPatternPlayer."""
-
     sequence = build_toy_feature_sequence(toys)
-    log_fn(f"\n>>> [LOCAL ONLY] {len(toys)} toy(s) via SyncPatternPlayer:")
-    for tid, t in toys.items():
-        name = t.get("name") or t.get("nickName") or "—"
-        log_fn(f"    {tid}: {name} — {player.features(tid)}")
-
-    log_fn(
-        f"\n>>> 1. Per-motor sine wave ({feature_duration_sec}s each) — {len(sequence)} steps:"
+    _log_toy_inventory(
+        toys,
+        header=f"\n>>> [LOCAL ONLY] {len(toys)} toy(s) via SyncPatternPlayer:",
+        log_fn=log_fn,
     )
-    last_tid: str | None = None
-    for idx, (tid, feat) in enumerate(sequence):
-        name = toys[tid].get("name") or toys[tid].get("nickName") or tid
-        log_fn(f"    [{idx + 1}/{len(sequence)}] {name} — {feat}")
-        player.play_sine_wave(
-            tid,
-            feat,
-            duration_sec=feature_duration_sec,
-            stop_prev_first=(tid != last_tid),
-        )
-        last_tid = tid
-        time.sleep(0.3)
+    _play_player_sequence(
+        player,
+        toys,
+        sequence,
+        feature_duration_sec=feature_duration_sec,
+        log_fn=log_fn,
+    )
 
     toy_list = list(toys.items())
     all_targets = [(tid, f) for tid, t in toys.items() for f in features_for_toy(t)]
     if len(all_targets) < 2:
-        time.sleep(0.2)
-        for tid in toys:
-            player.stop(tid)
+        _stop_player_for_all_toys(player, toys)
         log_fn(">>> Done.")
         return
 
@@ -133,9 +176,7 @@ def run_sync_pattern_player_demo(
         player.play_combo(all_targets, duration_sec=combo_duration_sec)
         time.sleep(0.5)
 
-    time.sleep(0.2)
-    for tid in toys:
-        player.stop(tid)
+    _stop_player_for_all_toys(player, toys)
     log_fn(">>> Done.")
 
 
@@ -149,18 +190,8 @@ def run_lan_function_demo(
     log_fn: Callable[[str], None] = log,
 ) -> None:
     """Sine wave + combos demo executed via LANClient.function_request."""
-
     sequence = build_toy_feature_sequence(toys)
-    log_fn(f"\n>>> Detected {len(toys)} toy(s):")
-    for tid, t in toys.items():
-        name = t.get("name") or t.get("nickName") or "—"
-        model = t.get("toyType") or name
-        feats = features_for_toy(t)
-        log_fn(f"    {tid}: {name} ({model}) — {feats}")
-
-    def stop_all_features(toy_id: str) -> dict[str, int]:
-        feats = features_for_toy(toys[toy_id])
-        return {f: 0 for f in feats}
+    _log_toy_inventory(toys, header=f"\n>>> Detected {len(toys)} toy(s):", log_fn=log_fn)
 
     interval = feature_duration_sec / num_steps
     log_fn(
@@ -182,7 +213,7 @@ def run_lan_function_demo(
             time.sleep(interval)
         last_toy_id = tid
         time.sleep(0.15)
-        client.function_request(stop_all_features(tid), time=0, toy_id=tid)
+        client.function_request(_stop_all_features(toys, tid), time=0, toy_id=tid)
         time.sleep(0.3)
 
     rng = secrets.SystemRandom()
@@ -209,7 +240,7 @@ def run_lan_function_demo(
                 client.function_request(action, time=0, toy_id=tid, stop_previous=False)
                 time.sleep(combo_duration_sec / num_steps)
             time.sleep(0.15)
-            client.function_request(stop_all_features(tid), time=0, toy_id=tid)
+            client.function_request(_stop_all_features(toys, tid), time=0, toy_id=tid)
             time.sleep(0.5)
 
         if len(toy_list) >= 2:
@@ -239,7 +270,7 @@ def run_lan_function_demo(
                 time.sleep(combo_duration_sec / num_steps)
             time.sleep(0.15)
             for tid in (t1_id, t2_id):
-                client.function_request(stop_all_features(tid), time=0, toy_id=tid)
+                client.function_request(_stop_all_features(toys, tid), time=0, toy_id=tid)
             time.sleep(0.5)
 
         log_fn(f"\n>>> 4. All motors together — {combo_duration_sec}s, random phases:")
@@ -267,11 +298,11 @@ def run_lan_function_demo(
             time.sleep(combo_duration_sec / num_steps)
         time.sleep(0.15)
         for tid in toys:
-            client.function_request(stop_all_features(tid), time=0, toy_id=tid)
+            client.function_request(_stop_all_features(toys, tid), time=0, toy_id=tid)
         time.sleep(0.5)
 
     time.sleep(0.2)
     for tid in toys:
-        client.function_request(stop_all_features(tid), time=0, toy_id=tid)
+        client.function_request(_stop_all_features(toys, tid), time=0, toy_id=tid)
     log_fn(">>> Done.")
 
