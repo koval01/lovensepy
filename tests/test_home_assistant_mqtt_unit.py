@@ -141,7 +141,7 @@ def test_handle_command_function_request():
         await b._handle_command_topic("lovensepy/t1/vibrate/set", b"7")
         lan.function_request.assert_awaited_once()
         args, kwargs = lan.function_request.await_args
-        assert args[0] == {"Vibrate": 7}
+        assert args[0]["Vibrate"] == 7
         assert kwargs["toy_id"] == "real1"
 
     asyncio.run(_run())
@@ -190,6 +190,20 @@ def test_handle_command_clamps_vibrate():
         b, lan, _pub = _make_partial_bridge()
         await b._handle_command_topic("lovensepy/t1/vibrate/set", b"99")
         args, kwargs = lan.function_request.await_args
-        assert args[0] == {"Vibrate": 20}
+        assert args[0]["Vibrate"] == 20
+
+    asyncio.run(_run())
+
+
+def test_handle_command_keeps_other_vector_levels():
+    async def _run():
+        b, lan, _pub = _make_partial_bridge()
+        b._toys = {
+            "t1": {"id": "real1", "name": "Test", "toyType": "dolce"},
+        }
+        b._feature_levels["t1"] = {"Vibrate1": 9, "Vibrate2": 4}
+        await b._handle_command_topic("lovensepy/t1/vibrate1/set", b"11")
+        args, _kwargs = lan.function_request.await_args
+        assert args[0] == {"Vibrate1": 11, "Vibrate2": 4}
 
     asyncio.run(_run())

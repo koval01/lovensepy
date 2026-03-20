@@ -222,6 +222,7 @@ class HAMqttBridge:
         self._toys: dict[str, dict[str, Any]] = {}
         self._published_discovery: set[str] = set()
         self._initialized_toy_states: set[str] = set()
+        self._feature_levels: dict[str, dict[str, int]] = {}
 
         self._refresh_task: asyncio.Task[None] | None = None
         self._toy_events_task: asyncio.Task[None] | None = None
@@ -346,6 +347,7 @@ class HAMqttBridge:
             self._lan = None
 
         self._deduper.clear()
+        self._feature_levels.clear()
         self._mqtt_ready = None
         self._loop = None
 
@@ -480,6 +482,7 @@ class HAMqttBridge:
                 if action in supported:
                     seg = feature_topic_segment(action)
                     clamped = _clamp_feature(action, float(raw))
+                    self._feature_levels.setdefault(safe, {})[action] = int(clamped)
                     await self._publish_state_str(safe, seg, str(int(clamped)))
 
     async def _refresh_toys_and_discovery(self) -> None:
@@ -532,7 +535,9 @@ class HAMqttBridge:
             safe = mqtt_safe_toy_id(str(toy.get("id")))
             if safe not in self._initialized_toy_states:
                 self._initialized_toy_states.add(safe)
+                levels = self._feature_levels.setdefault(safe, {})
                 for action in features_for_toy(toy):
+                    levels[action] = 0
                     seg = feature_topic_segment(action)
                     await self._publish_state_str(safe, seg, "0", force=True)
 
@@ -577,7 +582,9 @@ class HAMqttBridge:
         try:
             if feature_segment == "stop":
                 await self._lan.stop(toy_id=toy_id)
+                levels = self._feature_levels.setdefault(safe_id, {})
                 for action in features_for_toy(toy):
+                    levels[action] = 0
                     seg = feature_topic_segment(action)
                     await self._publish_state_str(safe_id, seg, "0", force=True)
                 return
@@ -607,7 +614,14 @@ class HAMqttBridge:
                 _logger.warning("Invalid number payload %r", text)
                 return
             level_i = int(_clamp_feature(action, level))
-            await self._lan.function_request({action: level_i}, toy_id=toy_id)
+            levels = self._feature_levels.setdefault(safe_id, {})
+            merged_actions: dict[str, int] = {
+                supported_action: int(levels.get(supported_action, 0))
+                for supported_action in features_for_toy(toy)
+            }
+            merged_actions[action] = level_i
+            await self._lan.function_request(merged_actions, toy_id=toy_id)
+            levels.update(merged_actions)
             await self._publish_state_str(safe_id, feature_segment, str(level_i), force=True)
         except Exception:  # pylint: disable=broad-exception-caught
             _logger.exception("Command failed topic=%s", topic)
