@@ -33,7 +33,7 @@ We will acknowledge your report within a reasonable time and keep you updated. W
 ## Security Considerations
 
 - **Tokens and credentials**: Never commit developer tokens, UIDs, or other credentials. Use environment variables or secure configuration.
-- **HTTPS**: The library uses certificate fingerprint verification for local HTTPS connections (ports 30011/30011) when `verify_ssl=False`.
+- **HTTPS**: The library uses certificate fingerprint verification for local HTTPS (e.g. port **30011** when `use_https=True`) when `verify_ssl=False`.
 - **Network**: LovensePy communicates with Lovense devices and cloud services. Ensure your network setup is appropriate for your use case.
 
 Thank you for helping keep LovensePy and its users safe.

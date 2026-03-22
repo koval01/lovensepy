@@ -7,6 +7,7 @@ from enum import StrEnum
 __all__ = [
     "Actions",
     "Presets",
+    "PRESET_BLE_PAT_INDEX",
     "ERROR_CODES",
     "FUNCTION_RANGES",
 ]
@@ -38,6 +39,17 @@ class Presets(StrEnum):
     WAVE = "wave"
     FIREWORKS = "fireworks"
     EARTHQUAKE = "earthquake"
+
+
+# UART ``Pat:{n};`` indices for the four Remote presets (Lovense Connect sends ``Pat`` with an
+# integer, not ``Pat:pulse``). Some developer docs call this slot ``Preset:{n};`` — firmware
+# varies; indices may differ by toy generation.
+PRESET_BLE_PAT_INDEX: dict[str, int] = {
+    Presets.PULSE.value: 1,
+    Presets.WAVE.value: 2,
+    Presets.FIREWORKS.value: 3,
+    Presets.EARTHQUAKE.value: 4,
+}
 
 
 # Max levels per feature type (Lovense API convention)

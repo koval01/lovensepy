@@ -17,24 +17,50 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Phase:
     name: str
-    target: str
+    targets: tuple[str, ...]
     extra_args: tuple[str, ...] = ()
 
 
 PHASES: tuple[Phase, ...] = (
-    Phase("Unit", "tests/test_unit.py"),
-    Phase("Async transports/client unit", "tests/test_async_clients.py"),
-    Phase("Socket client unit", "tests/test_socket_client_unit.py"),
-    Phase("Home Assistant MQTT unit", "tests/test_home_assistant_mqtt_unit.py"),
-    Phase("LAN integration", "tests/test_local.py", ("-s",)),
-    Phase("Toy events integration", "tests/test_toy_events.py", ("-s",)),
-    Phase("Socket integration", "tests/test_socket.py", ("-s",)),
-    Phase("Server integration", "tests/test_standard_server.py", ("-s",)),
+    Phase("Unit", ("tests/test_unit.py",)),
+    Phase("Async transports/client unit", ("tests/test_async_clients.py",)),
+    Phase("Socket client unit", ("tests/test_socket_client_unit.py",)),
+    Phase("Home Assistant MQTT unit", ("tests/test_home_assistant_mqtt_unit.py",)),
+    Phase(
+        "BLE / UART / transport unit (no devices)",
+        (
+            "tests/test_ble_direct_unit.py",
+            "tests/test_ble_direct_hub_unit.py",
+            "tests/test_ble_direct_sync_hub_unit.py",
+            "tests/test_uart_replies.py",
+            "tests/test_ble_uart_catalog.py",
+            "tests/test_transport_ws_unit.py",
+            "tests/test_socket_api_cleanup_unit.py",
+        ),
+    ),
+    Phase("LAN integration", ("tests/test_local.py",), ("-s",)),
+    Phase("Toy events integration", ("tests/test_toy_events.py",), ("-s",)),
+    Phase("Socket integration", ("tests/test_socket.py",), ("-s",)),
+    Phase("Server integration", ("tests/test_standard_server.py",), ("-s",)),
+    Phase(
+        "Connection methods sequential",
+        ("tests/test_connection_methods_sequential.py",),
+        ("-s",),
+    ),
+    Phase("BLE integration (hardware)", ("tests/test_ble_direct_integration.py",), ("-s",)),
 )
 
 
 def _run_phase(phase: Phase, pytest_args: list[str]) -> int:
-    cmd = [sys.executable, "-m", "pytest", phase.target, "-v", *phase.extra_args, *pytest_args]
+    cmd = [
+        sys.executable,
+        "-m",
+        "pytest",
+        *phase.targets,
+        "-v",
+        *phase.extra_args,
+        *pytest_args,
+    ]
     print(f"\n=== [{phase.name}] ===")
     print(" ".join(cmd), flush=True)
     return subprocess.run(cmd, check=False).returncode

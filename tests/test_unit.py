@@ -5,7 +5,7 @@ Unit tests (no Lovense connection required).
 import tomllib
 from pathlib import Path
 
-from lovensepy import Actions, LANClient, Presets, ServerClient
+from lovensepy import PRESET_BLE_PAT_INDEX, Actions, LANClient, Presets, ServerClient
 from lovensepy._constants import ERROR_CODES, FUNCTION_RANGES
 
 
@@ -20,6 +20,14 @@ def test_presets_enum():
     """Presets has expected values."""
     assert Presets.PULSE == "pulse"
     assert Presets.WAVE == "wave"
+
+
+def test_preset_ble_pat_index_default_slots():
+    """BLE UART Pat slot map for the four Remote names (Connect-style indices)."""
+    assert PRESET_BLE_PAT_INDEX["pulse"] == 1
+    assert PRESET_BLE_PAT_INDEX["wave"] == 2
+    assert PRESET_BLE_PAT_INDEX["fireworks"] == 3
+    assert PRESET_BLE_PAT_INDEX["earthquake"] == 4
 
 
 def test_error_codes():
@@ -62,6 +70,28 @@ def test_server_client_creation():
     assert "github.com/koval01/lovensepy" in c._transport.headers["User-Agent"]
 
 
+def test_server_pattern_request_matches_lan_overloads():
+    """Server pattern_request accepts list form (LAN-style) or rule+strength strings."""
+    from unittest.mock import patch
+
+    c = ServerClient("t", "u")
+    ok = {"code": 200, "type": "OK", "result": True}
+    with patch.object(c, "send_command", return_value=ok) as m:
+        c.pattern_request([5, 10], time=4, toy_id="ab")
+    p1 = m.call_args_list[0][0][0]
+    assert p1["command"] == "Pattern"
+    assert p1["strength"] == "5;10"
+    assert p1["timeSec"] == 4
+    assert p1["toy"] == "ab"
+
+    m.reset_mock()
+    with patch.object(c, "send_command", return_value=ok) as m:
+        c.pattern_request("V:1;F:;S:200#", "1;2;3", time=1)
+    p2 = m.call_args_list[0][0][0]
+    assert p2["rule"] == "V:1;F:;S:200#"
+    assert p2["strength"] == "1;2;3"
+
+
 def test_lan_client_decode_response():
     """decode_response handles None and dict."""
     c = LANClient("Test", "127.0.0.1")
@@ -81,6 +111,9 @@ def test_features_for_toy():
     nora = {"toyType": "nora"}
     assert "Vibrate" in features_for_toy(nora)
     assert "Rotate" in features_for_toy(nora)
+
+    gush = {"toyType": "gush", "name": "Gush"}
+    assert features_for_toy(gush) == ["Vibrate"]
 
 
 def test_sync_pattern_player_creation():

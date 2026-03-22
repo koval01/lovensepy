@@ -10,9 +10,22 @@ from typing import Any
 
 import websockets
 from websockets.exceptions import ConnectionClosed, InvalidState, WebSocketException
-from websockets.protocol import OPEN
+
+try:
+    from websockets.protocol import State
+
+    OPEN = State.OPEN
+except ImportError:
+    from websockets.protocol import OPEN
 
 __all__ = ["WsTransport"]
+
+
+async def _close_ws(ws: Any) -> None:
+    try:
+        await ws.close()
+    except (OSError, WebSocketException, ConnectionClosed, InvalidState):
+        pass
 
 
 def _is_open(ws: Any) -> bool:
@@ -99,15 +112,19 @@ class WsTransport:
     def close(self) -> None:
         """Close connection.
 
-        Best called from async context with a running event loop. If no loop is
-        running (e.g. from another thread), the connection is abandoned and
-        will be garbage-collected when the websocket object is freed.
+        With a running event loop, schedules an async close. Without one (e.g. sync
+        teardown), runs a short ``asyncio.run`` close so the socket is not left open
+        until GC.
         """
         ws = self._ws
         self._ws = None
         if ws and _is_open(ws):
             try:
                 loop = asyncio.get_running_loop()
-                loop.call_soon_threadsafe(lambda: asyncio.create_task(ws.close()))
+                loop.call_soon_threadsafe(lambda: asyncio.create_task(_close_ws(ws)))
             except RuntimeError:
-                pass  # No running loop - connection will be abandoned
+                try:
+                    asyncio.run(_close_ws(ws))
+                except RuntimeError:
+                    # Nested event-loop edge case; best-effort only.
+                    pass

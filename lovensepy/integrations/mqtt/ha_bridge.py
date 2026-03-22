@@ -577,6 +577,9 @@ class HAMqttBridge:
             return
         toy_id = str(toy.get("id"))
 
+        # MQTT delivers raw bytes; we decode explicitly with errors="replace" so a
+        # mis-encoded or garbage payload does not raise UnicodeDecodeError and
+        # tear down handling—invalid values are caught by validation below.
         text = payload.decode("utf-8", errors="replace").strip()
 
         try:

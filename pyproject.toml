@@ -4,10 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lovensepy"
-version = "1.0.6"
+version = "1.1.0"
 description = "Python Lovense API client"
 readme = "README.md"
 license = {text = "Apache-2.0"}
+authors = [{name = "LovensePy contributors", email = "git@koval-dev.org"}]
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.27.0",
@@ -15,7 +16,7 @@ dependencies = [
     "websockets>=12.0",
     "hyperframe>=6.1.0",
 ]
-keywords = ["lovense", "api", "iot", "teledildonics", "asyncio", "sdk", "mqtt", "home-assistant"]
+keywords = ["lovense", "api", "iot", "teledildonics", "asyncio", "sdk", "mqtt", "home-assistant", "ble"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -30,19 +31,41 @@ classifiers = [
 mqtt = [
     "paho-mqtt>=2.1.0",
 ]
+ble = [
+    "bleak>=0.22.0",
+    "pick>=2.2.0",
+]
+service = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.0",
     "ruff>=0.8.0",
+    "pylint>=3.3.0",
+    "bandit>=1.8.0",
+    "pip-audit>=2.7.0",
+    "build>=1.0.0",
     "paho-mqtt>=2.1.0",
+    "bleak>=0.22.0",
+    "pick>=2.2.0",
     "semgrep>=1.100.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "pymdown-extensions>=10.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/koval01/lovensepy"
 Repository = "https://github.com/koval01/lovensepy"
 Issues = "https://github.com/koval01/lovensepy/issues"
-Documentation = "https://github.com/koval01/lovensepy#readme"
+Documentation = "https://lovensepy.koval-dev.org/"
 
 [tool.ruff]
 target-version = "py312"
@@ -59,8 +82,28 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["lovensepy"]
 
+[tool.ruff.lint.per-file-ignores]
+"lovensepy/ble_direct/client.py" = ["E501"]
+"lovensepy/ble_direct/standard_compat.py" = ["E501"]
+
 [tool.setuptools.package-data]
 lovensepy = ["py.typed"]
 
 [tool.setuptools.packages.find]
 include = ["lovensepy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+markers = [
+    "asyncio: async tests (pytest-asyncio)",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["lovensepy"]
+omit = [
+    "*/tests/*",
+]

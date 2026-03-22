@@ -1,9 +1,45 @@
 import asyncio
+import inspect
 
-from lovensepy import Actions, AsyncLANClient
+import pytest
+
+from lovensepy import Actions, AsyncLANClient, AsyncServerClient, LovenseAsyncControlClient
 from lovensepy.standard import async_lan as async_lan_module
 from lovensepy.transport import async_http as async_http_module
 from lovensepy.transport.async_http import AsyncHttpTransport
+
+
+def test_lovense_async_control_client_isinstance():
+    assert issubclass(AsyncLANClient, LovenseAsyncControlClient)
+    assert issubclass(AsyncServerClient, LovenseAsyncControlClient)
+    pytest.importorskip("bleak", reason="ble_direct needs bleak")
+    from lovensepy.ble_direct.client import BleDirectClient
+    from lovensepy.ble_direct.hub import BleDirectHub
+
+    assert issubclass(BleDirectClient, LovenseAsyncControlClient)
+    assert issubclass(BleDirectHub, LovenseAsyncControlClient)
+
+
+def test_async_server_accepts_scheduler_kwargs():
+    sig = inspect.signature(AsyncServerClient.function_request)
+    assert "wait_for_completion" in sig.parameters
+    assert sig.parameters["wait_for_completion"].kind == inspect.Parameter.KEYWORD_ONLY
+
+
+async def test_async_server_function_request_wait_for_completion_no_typeerror(monkeypatch):
+    client = AsyncServerClient("tok", "uid1")
+
+    async def fake_send_command(payload, timeout=None):  # type: ignore[no-untyped-def]
+        return {"code": 200, "type": "OK", "result": True, "data": {}}
+
+    monkeypatch.setattr(client, "send_command", fake_send_command)
+
+    await client.function_request(
+        {Actions.VIBRATE: 3},
+        time=0,
+        toy_id="t1",
+        wait_for_completion=False,
+    )
 
 
 def test_async_lan_context_manager_closes_transport():

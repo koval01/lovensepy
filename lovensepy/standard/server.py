@@ -11,14 +11,14 @@ Lovense POSTs to your Callback URL (configured in dashboard) with uid.
 import hashlib
 import json
 import logging as py_logging
-from typing import Any, TypeVar
+from typing import Any, TypeVar, overload
 
 import httpx
 from pydantic import BaseModel, ValidationError
 
 from .._constants import FUNCTION_RANGES, SERVER_ERROR_CODES, Actions, Presets
 from .._http_identity import default_http_headers
-from .._models import CommandResponse
+from .._models import CommandResponse, GetToyNameResponse, GetToysResponse
 from ..exceptions import LovenseError, LovenseResponseParseError
 from ..transport import HttpTransport
 
@@ -30,6 +30,40 @@ GET_QR_CODE_URL = "https://api.lovense-api.com/api/lan/getQrCode"
 _ResponseModelT = TypeVar("_ResponseModelT", bound=BaseModel)
 
 _logger = py_logging.getLogger(__name__)
+
+
+def _action_letter_pattern(action: str | Actions) -> str:
+    """Map action to pattern rule letter (same rules as :class:`LANClient`)."""
+    if isinstance(action, Actions):
+        action = str(action)
+    action = str(action).strip().lower()
+    mapping = {
+        "vibrate": "v",
+        "vibrate1": "v",
+        "vibrate2": "v",
+        "vibrate3": "v",
+        "rotate": "r",
+        "pump": "p",
+        "thrusting": "t",
+        "fingering": "f",
+        "suction": "s",
+        "depth": "d",
+        "oscillate": "o",
+        "stroke": "st",
+    }
+    return mapping.get(action, action[0] if action else "")
+
+
+def _actions_to_rule_letters(actions: list[str | Actions] | None) -> str:
+    if not actions or Actions.ALL in actions:
+        return ""
+    letters: list[str] = []
+    valid = {"v", "r", "p", "t", "f", "s", "d", "o", "st"}
+    for a in actions:
+        letter = _action_letter_pattern(a)
+        if letter and letter in valid and letter not in letters:
+            letters.append(letter)
+    return ",".join(letters) if letters else ""
 
 
 def get_qr_code(
@@ -53,7 +87,7 @@ def get_qr_code(
         timeout: Request timeout
 
     Returns:
-        dict with "qr" (image URL), "code" (6-char code for PC Remote)
+        dict with "qr" (image URL), "code" (6-char code for Remote)
 
     Raises:
         ValueError: If API rejects the request
@@ -200,6 +234,20 @@ class ServerClient:
             payload["stopPrevious"] = 1 if stop_previous else 0
         return self._validate_response(self.send_command(payload), CommandResponse)
 
+    def get_toys(self, timeout: float | None = None) -> GetToysResponse:
+        """Get toys for this ``uid`` (same command as :class:`LANClient`)."""
+        return self._validate_response(
+            self.send_command({"command": "GetToys"}, timeout=timeout),
+            GetToysResponse,
+        )
+
+    def get_toys_name(self, timeout: float | None = None) -> GetToyNameResponse:
+        """Get toy display names (same command as :class:`LANClient`)."""
+        return self._validate_response(
+            self.send_command({"command": "GetToyName"}, timeout=timeout),
+            GetToyNameResponse,
+        )
+
     def stop(self, toy_id: str | list[str] | None = None) -> CommandResponse:
         """Stop all toys."""
         payload: dict[str, Any] = {
@@ -212,14 +260,14 @@ class ServerClient:
             payload["toy"] = toy_id
         return self._validate_response(self.send_command(payload), CommandResponse)
 
-    def pattern_request(
+    def pattern_request_raw(
         self,
-        rule: str,
         strength: str,
+        rule: str = "V:1;F:;S:100#",
         time: float = 0,
         toy_id: str | list[str] | None = None,
     ) -> CommandResponse:
-        """Send Pattern command."""
+        """Send Pattern with raw ``strength`` and ``rule`` strings (same as :class:`LANClient`)."""
         payload: dict[str, Any] = {
             "command": "Pattern",
             "rule": rule,
@@ -230,6 +278,64 @@ class ServerClient:
         if toy_id is not None:
             payload["toy"] = toy_id
         return self._validate_response(self.send_command(payload), CommandResponse)
+
+    @overload
+    def pattern_request(
+        self,
+        pattern: list[int],
+        actions: list[str | Actions] | None = None,
+        *,
+        interval: int = 100,
+        time: float = 0,
+        toy_id: str | list[str] | None = None,
+    ) -> CommandResponse: ...
+
+    @overload
+    def pattern_request(
+        self,
+        rule: str,
+        strength: str,
+        *,
+        time: float = 0,
+        toy_id: str | list[str] | None = None,
+    ) -> CommandResponse: ...
+
+    def pattern_request(
+        self,
+        arg1: list[int] | str,
+        arg2: list[str | Actions] | str | None = None,
+        *,
+        interval: int = 100,
+        time: float = 0,
+        toy_id: str | list[str] | None = None,
+    ) -> CommandResponse:
+        """Pattern from a strength list (like LAN) or raw ``rule`` + ``strength`` strings."""
+        if isinstance(arg1, list):
+            if arg2 is not None and not isinstance(arg2, list):
+                raise TypeError(
+                    "pattern_request([levels], actions=...) — `actions` must be a list or None"
+                )
+            actions = arg2
+            actions = actions or [Actions.ALL]
+            pattern = arg1[:50]
+            pattern = [min(max(0, n), 20) for n in pattern]
+            interval_clamped = min(max(interval, 100), 1000)
+            letters = _actions_to_rule_letters(actions)
+            rule = (
+                f"V:1;F:{letters};S:{interval_clamped}#"
+                if letters
+                else f"V:1;F:;S:{interval_clamped}#"
+            )
+            strength = ";".join(map(str, pattern))
+            return self.pattern_request_raw(strength, rule, time=time, toy_id=toy_id)
+        if isinstance(arg1, str):
+            if not isinstance(arg2, str):
+                raise TypeError(
+                    "pattern_request(rule, strength, ...) requires `strength` as second "
+                    "positional argument"
+                )
+            return self.pattern_request_raw(arg2, arg1, time=time, toy_id=toy_id)
+        raise TypeError("pattern_request first argument must be a list of levels or a rule string")
 
     def preset_request(
         self,

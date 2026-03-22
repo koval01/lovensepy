@@ -75,7 +75,7 @@ def _log(msg: str) -> None:
     print(msg, flush=True)
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 @requires_socket
 @requires_interactive
 async def test_full_flow(ws_url):
@@ -98,7 +98,7 @@ async def test_full_flow(ws_url):
         await run_socket_function_demo(client, toys, log_fn=_log)
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 @requires_socket
 @requires_interactive
 async def test_by_local(ws_url):

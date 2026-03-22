@@ -12,7 +12,7 @@ import ssl
 
 __all__ = ["LOVENSE_HTTPS_FINGERPRINT", "verify_cert_fingerprint"]
 
-# SHA-256 fingerprint of *.lovense.club (Lovense Remote HTTPS, port 30011/30011)
+# SHA-256 fingerprint of *.lovense.club (Lovense Remote HTTPS, port 30011)
 LOVENSE_HTTPS_FINGERPRINT = (
     "EF:A7:4A:20:9B:B8:FC:C2:A8:1C:9F:51:51:DC:89:9A:E0:"
     "C5:CD:80:C4:93:D2:65:69:79:8D:CC:F5:A8:82:42"

@@ -16,6 +16,7 @@ __all__ = [
     "LovenseDeviceOfflineError",
     "LovenseTimeoutError",
     "LovenseResponseParseError",
+    "LovenseBLEError",
 ]
 
 
@@ -46,3 +47,7 @@ class LovenseTimeoutError(LovenseDeviceOfflineError):
 
 class LovenseResponseParseError(LovenseNetworkError):
     """Raised when the server response cannot be parsed as expected JSON."""
+
+
+class LovenseBLEError(LovenseDeviceOfflineError):
+    """Direct BLE failure, missing ``bleak``, unknown GATT TX UUID, or not connected."""

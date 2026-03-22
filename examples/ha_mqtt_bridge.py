@@ -10,7 +10,7 @@ Requires:
     pip install 'lovensepy[mqtt]'
 
 Environment:
-    LOVENSE_LAN_IP       — phone/PC running Lovense Remote (Game Mode), e.g. 192.168.1.100
+    LOVENSE_LAN_IP       — phone running Lovense Remote (Game Mode), e.g. 192.168.1.100
     MQTT_HOST            — MQTT broker host (default: 192.168.1.2)
     MQTT_PORT            — broker port (default: 1883)
     MQTT_USER / MQTT_PASSWORD — optional broker auth

@@ -51,7 +51,7 @@ async def _collect(
 
 
 @requires_lan
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_toy_events_connect_and_events():
     events, access_granted = await _collect(
         app_name="lovensepy_test",
@@ -63,7 +63,7 @@ async def test_toy_events_connect_and_events():
 
 
 @requires_lan
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_toy_events_interactive():
     events, access_granted = await _collect(
         app_name="lovensepy_events_test",

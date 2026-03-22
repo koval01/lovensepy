@@ -6,6 +6,8 @@ Use with toy dict from GetToys / basicapi_update_device_info_tc.
 
 from typing import Any
 
+from lovensepy.toy_type_defaults import default_features_for_toy_type
+
 __all__ = ["features_for_toy", "stop_actions"]
 
 SHORT_TO_FULL: dict[str, str] = {
@@ -40,7 +42,8 @@ def features_for_toy(toy: dict[str, Any]) -> list[str]:
     """
     Get ordered list of features (Vibrate1, Vibrate2, Rotate, etc.) for toy.
 
-    Uses API shortFunctionNames/fullFunctionNames when available.
+    Uses API shortFunctionNames/fullFunctionNames when available; otherwise
+    :func:`lovensepy.toy_type_defaults.default_features_for_toy_type` by ``toyType``.
     Edge/Diamo: API often returns only 'v'/'Vibrate' — override to Vibrate1, Vibrate2.
     """
     if toy is None:
@@ -65,13 +68,7 @@ def features_for_toy(toy: dict[str, Any]) -> list[str]:
         if ("edge" in toy_type or "diamo" in toy_type) and result == ["Vibrate"]:
             return ["Vibrate1", "Vibrate2"]
         return result
-    if "edge" in toy_type or "diamo" in toy_type:
-        return ["Vibrate1", "Vibrate2"]
-    if "nora" in toy_type:
-        return ["Vibrate", "Rotate"]
-    if "max" in toy_type:
-        return ["Vibrate", "Rotate", "Pump"]
-    return ["Vibrate"]
+    return list(default_features_for_toy_type(toy_type))
 
 
 def stop_actions(toy: dict[str, Any]) -> dict[str, int]:

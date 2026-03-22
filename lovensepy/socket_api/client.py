@@ -24,6 +24,17 @@ PING_INTERVAL = 20.0  # seconds
 _logger = logging.getLogger(__name__)
 
 
+def _close_async_lan_client(lan: AsyncLANClient | None) -> None:
+    """Close ``AsyncLANClient`` whether or not an event loop is running."""
+    if lan is None:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(lan.aclose())
+    except RuntimeError:
+        asyncio.run(lan.aclose())
+
+
 class SocketAPIClient:
     """
     Async Lovense Socket API client.
@@ -207,13 +218,9 @@ class SocketAPIClient:
         self._callback_tasks.clear()
         self._transport.close()
         self._socket_io_connected = False
-        if self._lan_client:
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(self._lan_client.aclose())
-            except RuntimeError:
-                pass
-            self._lan_client = None
+        lan = self._lan_client
+        self._lan_client = None
+        _close_async_lan_client(lan)
         self._closed.set()
 
     def _cleanup(self) -> None:
@@ -230,13 +237,9 @@ class SocketAPIClient:
         self._callback_tasks.clear()
         self._runner_task = None
         self._transport.close()
-        if self._lan_client:
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(self._lan_client.aclose())
-            except RuntimeError:
-                pass
-            self._lan_client = None
+        lan = self._lan_client
+        self._lan_client = None
+        _close_async_lan_client(lan)
         if self._on_close:
             cb = self._on_close()
             if asyncio.iscoroutine(cb):
@@ -299,7 +302,7 @@ class SocketAPIClient:
                     # `lovense.club` is flaky; derive the LAN IP back and connect directly.
                     local_ip: str | None = None
                     if isinstance(domain, str) and domain.endswith(".lovense.club"):
-                        # Reverse of ip_to_domain(): strip suffix and replace '-' with '.'
+                        # Inverse of ip_to_domain(): strip suffix and replace '-' with '.'
                         local_ip = domain[: -len(".lovense.club")].replace("-", ".")
 
                     if local_ip:

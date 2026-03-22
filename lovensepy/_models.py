@@ -36,6 +36,8 @@ class ToyInfo(BaseModel):
     nickName: str | None = None
     shortFunctionNames: list[str] | None = None
     fullFunctionNames: list[str] | None = None
+    toyType: str | None = None
+    type: str | None = None
 
     model_config = {"extra": "allow"}
 

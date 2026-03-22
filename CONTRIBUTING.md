@@ -6,7 +6,7 @@ Thank you for your interest in contributing to LovensePy! This document provides
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python **3.12 or higher** (matches `requires-python` in `pyproject.toml`)
 - [pip](https://pip.pypa.io/) for package management
 
 ### Development Setup
@@ -34,8 +34,12 @@ Thank you for your interest in contributing to LovensePy! This document provides
 4. **Run tests to verify setup**
 
    ```bash
-   pytest tests/test_unit.py -v
+   pytest tests/test_unit.py tests/test_async_clients.py -v
    ```
+
+   For the same fast checks as CI (see `.github/workflows/tests.yml`), run all
+   listed unit test modules, or use `python -m tests.run_all` for the full
+   ordered suite (including integration phases that need devices or tokens).
 
 ## How to Contribute
 
@@ -92,7 +96,20 @@ Thank you for your interest in contributing to LovensePy! This document provides
 - `lovensepy/` — main package
 - `examples/` — usage examples
 - `tests/` — unit and integration tests
-- Integration tests require env vars (see README Tests section)
+- `docs/` — Markdown documentation (MkDocs source; published to [GitHub Pages](https://lovensepy.koval-dev.org/))
+- `mkdocs.yml` — MkDocs site configuration
+- Integration tests require env vars (see [docs/appendix.md — Tests](docs/appendix.md#tests))
+
+### Documentation site
+
+Preview the docs site locally:
+
+```bash
+pip install -e ".[docs]"
+mkdocs serve
+```
+
+Or with uv: `uv sync --extra docs` then `uv run mkdocs serve`. CI builds with `mkdocs build --strict` on pushes that touch `docs/` or `mkdocs.yml`.
 
 ## Questions?
 
