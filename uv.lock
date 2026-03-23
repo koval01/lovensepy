@@ -799,7 +799,7 @@ wheels = [
 
 [[package]]
 name = "lovensepy"
-version = "1.1.1"
+version = "1.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

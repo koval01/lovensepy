@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging as py_logging
+import threading
 from typing import Any
 
 import httpx
@@ -43,13 +44,15 @@ class AsyncHttpTransport:
         self.timeout = timeout
         self.verify = verify
         self._clients: dict[bool, httpx.AsyncClient] = {}
+        self._clients_lock = threading.Lock()
 
     def _get_client(self, verify: bool) -> httpx.AsyncClient:
-        client = self._clients.get(verify)
-        if client is None:
-            client = httpx.AsyncClient(verify=verify, timeout=self.timeout)
-            self._clients[verify] = client
-        return client
+        with self._clients_lock:
+            client = self._clients.get(verify)
+            if client is None:
+                client = httpx.AsyncClient(verify=verify, timeout=self.timeout)
+                self._clients[verify] = client
+            return client
 
     async def aclose(self) -> None:
         """Close all underlying HTTP sessions."""

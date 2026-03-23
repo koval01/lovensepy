@@ -22,6 +22,7 @@ class ControlScheduler:
         self._backend = backend
         self._session_max_sec = session_max_sec
         self._closed = False
+        self._state_lock = asyncio.Lock()
         self._locks: dict[str, asyncio.Lock] = {}
         self._levels: dict[tuple[str, str], float] = {}
         self._tasks: dict[tuple[str, str], asyncio.Task[None]] = {}
@@ -38,16 +39,18 @@ class ControlScheduler:
         return self._locks[toy_id]
 
     async def shutdown(self) -> None:
-        self._closed = True
-        pending = list(self._tasks.values()) + list(self._session_tasks.values())
+        async with self._state_lock:
+            self._closed = True
+            pending = list(self._tasks.values()) + list(self._session_tasks.values())
         for task in pending:
             task.cancel()
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
-        self._tasks.clear()
-        self._session_tasks.clear()
-        self._levels.clear()
-        self._meta.clear()
+        async with self._state_lock:
+            self._tasks.clear()
+            self._session_tasks.clear()
+            self._levels.clear()
+            self._meta.clear()
 
     async def _fetch_toy_dict(self, toy_id: str) -> dict[str, Any] | None:
         response = await self._backend.get_toys()
@@ -72,7 +75,8 @@ class ControlScheduler:
 
     async def _cancel_slot(self, toy_id: str, feature: str) -> None:
         key = (toy_id, feature)
-        old = self._tasks.pop(key, None)
+        async with self._state_lock:
+            old = self._tasks.pop(key, None)
         if old is not None and not old.done():
             old.cancel()
             try:
@@ -81,33 +85,41 @@ class ControlScheduler:
                 pass
 
     async def cancel_sessions_for_toy(self, toy_id: str | None) -> None:
-        to_cancel = [
-            tid
-            for tid, m in list(self._meta.items())
-            if m.get("kind") in ("preset", "pattern", "function_loop") and m.get("toy_id") == toy_id
-        ]
+        async with self._state_lock:
+            to_cancel = [
+                tid
+                for tid, m in list(self._meta.items())
+                if m.get("kind") in ("preset", "pattern", "function_loop")
+                and m.get("toy_id") == toy_id
+            ]
         for tid in to_cancel:
-            task = self._session_tasks.pop(tid, None)
+            async with self._state_lock:
+                task = self._session_tasks.pop(tid, None)
             if task is not None and not task.done():
                 task.cancel()
                 try:
                     await task
                 except asyncio.CancelledError:
                     pass
-            self._meta.pop(tid, None)
+            async with self._state_lock:
+                self._meta.pop(tid, None)
 
     async def cancel_all_sessions(self) -> None:
-        for tid in list(self._session_tasks.keys()):
-            task = self._session_tasks.pop(tid, None)
+        async with self._state_lock:
+            tids = list(self._session_tasks.keys())
+        for tid in tids:
+            async with self._state_lock:
+                task = self._session_tasks.pop(tid, None)
             if task is not None and not task.done():
                 task.cancel()
                 try:
                     await task
                 except asyncio.CancelledError:
                     pass
-        for tid, m in list(self._meta.items()):
-            if m.get("kind") in ("preset", "pattern", "function_loop"):
-                self._meta.pop(tid, None)
+        async with self._state_lock:
+            for tid, m in list(self._meta.items()):
+                if m.get("kind") in ("preset", "pattern", "function_loop"):
+                    self._meta.pop(tid, None)
 
     async def cancel_every_slot_for_toy(self, toy_id: str) -> None:
         await self.cancel_sessions_for_toy(toy_id)
@@ -127,7 +139,8 @@ class ControlScheduler:
     async def _run_session_until(self, task_id: str) -> None:
         try:
             while True:
-                meta = self._meta.get(task_id)
+                async with self._state_lock:
+                    meta = self._meta.get(task_id)
                 if not meta:
                     return
                 deadline = float(meta["ends_mono"])
@@ -140,41 +153,47 @@ class ControlScheduler:
             raise
         finally:
             current = asyncio.current_task()
-            registered = self._session_tasks.get(task_id)
-            if registered is current:
-                self._session_tasks.pop(task_id, None)
-                self._meta.pop(task_id, None)
+            async with self._state_lock:
+                registered = self._session_tasks.get(task_id)
+                if registered is current:
+                    self._session_tasks.pop(task_id, None)
+                    self._meta.pop(task_id, None)
 
-    def find_matching_preset_session(self, toy_id: str | None, preset_name: str) -> str | None:
-        for tid, m in list(self._meta.items()):
-            if m.get("kind") != "preset":
-                continue
-            if m.get("toy_id") != toy_id:
-                continue
-            if m.get("preset") != preset_name:
-                continue
-            t = self._session_tasks.get(tid)
-            if t is not None and not t.done():
-                return tid
-        return None
+    async def find_matching_preset_session(
+        self, toy_id: str | None, preset_name: str
+    ) -> str | None:
+        async with self._state_lock:
+            for tid, m in list(self._meta.items()):
+                if m.get("kind") != "preset":
+                    continue
+                if m.get("toy_id") != toy_id:
+                    continue
+                if m.get("preset") != preset_name:
+                    continue
+                t = self._session_tasks.get(tid)
+                if t is not None and not t.done():
+                    return tid
+            return None
 
-    def find_matching_pattern_session(self, toy_id: str | None, signature: str) -> str | None:
-        for tid, m in list(self._meta.items()):
-            if m.get("kind") != "pattern":
-                continue
-            if m.get("toy_id") != toy_id:
-                continue
-            if m.get("pattern_session_key") != signature:
-                continue
-            t = self._session_tasks.get(tid)
-            if t is not None and not t.done():
-                return tid
-        return None
+    async def find_matching_pattern_session(self, toy_id: str | None, signature: str) -> str | None:
+        async with self._state_lock:
+            for tid, m in list(self._meta.items()):
+                if m.get("kind") != "pattern":
+                    continue
+                if m.get("toy_id") != toy_id:
+                    continue
+                if m.get("pattern_session_key") != signature:
+                    continue
+                t = self._session_tasks.get(tid)
+                if t is not None and not t.done():
+                    return tid
+            return None
 
     async def extend_session(self, task_id: str, duration: float) -> dict[str, Any]:
         if self._closed:
             raise RuntimeError("scheduler_closed")
-        meta = self._meta.get(task_id)
+        async with self._state_lock:
+            meta = self._meta.get(task_id)
         if not meta:
             raise ValueError("session not found or not extendable")
         if meta.get("kind") == "function_loop":
@@ -236,8 +255,9 @@ class ControlScheduler:
             self._run_session_until(task_id),
             name=f"lovense:session:{kind_str}:{toy_id_meta}:wait",
         )
-        old_task = self._session_tasks.get(task_id)
-        self._session_tasks[task_id] = new_task
+        async with self._state_lock:
+            old_task = self._session_tasks.get(task_id)
+            self._session_tasks[task_id] = new_task
         if old_task is not None and old_task is not new_task and not old_task.done():
             old_task.cancel()
             try:
@@ -274,24 +294,26 @@ class ControlScheduler:
 
         now_mono = time.monotonic()
         started_at = datetime.now(UTC).isoformat()
-        self._meta[task_id] = {
-            "task_id": task_id,
-            "kind": kind,
-            "toy_id": toy_id,
-            "duration_requested_sec": requested,
-            "duration_sec": effective,
-            "duration_capped_to_max": duration_capped,
-            "extension_count": 0,
-            "started_at": started_at,
-            "started_monotonic_sec": now_mono,
-            "ends_mono": now_mono + effective,
-            **detail,
-        }
+        async with self._state_lock:
+            self._meta[task_id] = {
+                "task_id": task_id,
+                "kind": kind,
+                "toy_id": toy_id,
+                "duration_requested_sec": requested,
+                "duration_sec": effective,
+                "duration_capped_to_max": duration_capped,
+                "extension_count": 0,
+                "started_at": started_at,
+                "started_monotonic_sec": now_mono,
+                "ends_mono": now_mono + effective,
+                **detail,
+            }
         task = asyncio.create_task(
             self._run_session_until(task_id),
             name=f"lovense:session:{kind}:{toy_id}:wait",
         )
-        self._session_tasks[task_id] = task
+        async with self._state_lock:
+            self._session_tasks[task_id] = task
         return task_id
 
     def _clamp_actions(self, actions: dict[str, float]) -> dict[str, float]:
@@ -304,7 +326,9 @@ class ControlScheduler:
 
     async def _apply_snapshot(self, toy_id: str) -> None:
         actions: dict[str, float] = {}
-        for (tid, feat), lvl in self._levels.items():
+        async with self._state_lock:
+            levels = list(self._levels.items())
+        for (tid, feat), lvl in levels:
             if tid == toy_id:
                 actions[feat] = lvl
         actions = self._clamp_actions(actions)
@@ -332,7 +356,8 @@ class ControlScheduler:
             async with lock:
                 if self._closed:
                     return
-                self._levels[(toy_id, feature)] = level
+                async with self._state_lock:
+                    self._levels[(toy_id, feature)] = level
                 await self._apply_snapshot(toy_id)
 
             if duration > 0:
@@ -344,9 +369,10 @@ class ControlScheduler:
             raise
         finally:
             async with lock:
-                self._levels.pop((toy_id, feature), None)
-                self._tasks.pop((toy_id, feature), None)
-                self._meta.pop(task_id, None)
+                async with self._state_lock:
+                    self._levels.pop((toy_id, feature), None)
+                    self._tasks.pop((toy_id, feature), None)
+                    self._meta.pop(task_id, None)
                 await self._apply_snapshot(toy_id)
 
     async def schedule_function(
@@ -402,10 +428,9 @@ class ControlScheduler:
                 self._run_slot(task_id, toy_id, feature, float(level), float(duration)),
                 name=f"lovense:{toy_id}:{feature}",
             )
-            self._tasks[(toy_id, feature)] = task
             now_mono = time.monotonic()
             started_at = datetime.now(UTC).isoformat()
-            self._meta[task_id] = {
+            meta = {
                 "task_id": task_id,
                 "kind": "function",
                 "toy_id": toy_id,
@@ -416,13 +441,18 @@ class ControlScheduler:
                 "started_monotonic_sec": now_mono,
                 "ends_mono": (now_mono + duration) if duration > 0 else None,
             }
-            created.append(self._meta[task_id])
+            async with self._state_lock:
+                self._tasks[(toy_id, feature)] = task
+                self._meta[task_id] = meta
+            created.append(meta)
         return {"scheduled": created, "type": "OK"}
 
-    def list_tasks(self) -> list[dict[str, Any]]:
+    async def list_tasks(self) -> list[dict[str, Any]]:
         now = time.monotonic()
         rows: list[dict[str, Any]] = []
-        for meta in self._meta.values():
+        async with self._state_lock:
+            metas = list(self._meta.values())
+        for meta in metas:
             row = dict(meta)
             ends = row.get("ends_mono")
             if ends is not None:

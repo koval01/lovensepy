@@ -14,6 +14,7 @@ import pytest
 
 from lovensepy import LovenseBLEError
 from lovensepy._constants import Actions, Presets
+from lovensepy.ble_direct import client as ble_client_module
 from lovensepy.ble_direct.client import (
     DEFAULT_UART_RX_UUIDS,
     DEFAULT_UART_TX_UUIDS,
@@ -537,6 +538,19 @@ def test_two_clients_gather_mock():
     asyncio.run(_run())
 
     assert set(results) == {("addr-a", b"Vibrate:3;"), ("addr-b", b"Vibrate:7;")}
+
+
+def test_ble_connect_serializer_reuses_lock_for_same_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _run() -> None:
+        monkeypatch.setattr(ble_client_module.sys, "platform", "darwin", raising=False)
+        lock1 = ble_client_module._ble_connect_serializer()
+        lock2 = ble_client_module._ble_connect_serializer()
+        assert lock1 is not None
+        assert lock1 is lock2
+
+    asyncio.run(_run())
 
 
 def test_lovensepy_lazy_ble_direct_client():

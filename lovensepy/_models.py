@@ -13,15 +13,7 @@ __all__ = [
     "GetToysResponse",
     "GetToyNameResponse",
     "CommandResponse",
-    "FunctionPayload",
-    "PatternPayload",
     "PatternV2Action",
-    "PatternV2SetupPayload",
-    "PatternV2PlayPayload",
-    "PatternV2InitPlayPayload",
-    "PatternV2StopPayload",
-    "PresetPayload",
-    "PositionPayload",
 ]
 
 
@@ -140,7 +132,9 @@ class CommandResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-# --- Request payloads (for building commands) ---
+# --- Legacy request payload models ---
+# Kept for backward compatibility, but intentionally not exported in __all__
+# because runtime clients build payload dicts directly.
 
 
 class FunctionPayload(BaseModel):

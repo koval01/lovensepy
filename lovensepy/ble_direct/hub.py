@@ -17,6 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from lovensepy._command_utils import clamp_time_sec_in_payload
 from lovensepy._constants import ERROR_CODES, Actions, Presets
 from lovensepy._models import (
     CommandResponse,
@@ -119,10 +120,7 @@ class _HubMultiPlay:
 
 
 def _parse_command_payload(command_data: dict[str, Any]) -> dict[str, Any]:
-    cmd = dict(command_data)
-    if (ts := cmd.get("timeSec")) is not None and ts != 0:
-        cmd["timeSec"] = max(1.0, min(float(ts), 6000.0))
-    return cmd
+    return clamp_time_sec_in_payload(command_data)
 
 
 def _bundle_multi_command_results(

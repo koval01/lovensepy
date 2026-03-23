@@ -26,6 +26,15 @@ PHASES: tuple[Phase, ...] = (
     Phase("Async transports/client unit", ("tests/test_async_clients.py",)),
     Phase("Socket client unit", ("tests/test_socket_client_unit.py",)),
     Phase("Home Assistant MQTT unit", ("tests/test_home_assistant_mqtt_unit.py",)),
+    Phase("Scheduler unit", ("tests/test_scheduler_unit.py",)),
+    Phase(
+        "BLE metadata unit",
+        (
+            "tests/test_ble_branding_resolve_unit.py",
+            "tests/test_ble_marketing_firmware_unit.py",
+            "tests/test_ble_scan_advertisements.py",
+        ),
+    ),
     Phase(
         "BLE / UART / transport unit (no devices)",
         (
@@ -38,6 +47,7 @@ PHASES: tuple[Phase, ...] = (
             "tests/test_socket_api_cleanup_unit.py",
         ),
     ),
+    Phase("FastAPI service unit", ("tests/test_service_fastapi.py",)),
     Phase("LAN integration", ("tests/test_local.py",), ("-s",)),
     Phase("Toy events integration", ("tests/test_toy_events.py",), ("-s",)),
     Phase("Socket integration", ("tests/test_socket.py",), ("-s",)),

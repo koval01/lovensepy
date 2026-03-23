@@ -140,6 +140,7 @@ sequenceDiagram
 | `examples/ha_mqtt_bridge.py` | MQTT-мост Home Assistant (Game Mode + брокер) |
 | `examples/ble_direct_scan_and_two.py` | BLE CLI: скан (имена по умолчанию **LVS-**), интерактивный мультивыбор (`pick`) или `--no-tui` + номера; тест pulse; опционально **`--wave`** — синус по игрушке / моторам / всем |
 | `examples/ble_direct_preset_multi.py` | Прямой BLE: один и тот же **пресет** (`pulse` / `wave` / …) на **любое число** адресов параллельно (`asyncio.gather`) — один адрес или много; для **одного хаба** используйте `BleDirectHub` (см. [Прямой BLE](direct-ble.md)) |
+| `examples/ble_direct_send_uart_once.py` | Прямой BLE: подключиться к одной игрушке, отправить одну «сырую» UART-команду и отключиться (диагностика/ручные команды) |
 | `lovensepy.services.fastapi` / `examples/fastapi_lan_api.py` (обёртка) | FastAPI REST + OpenAPI; LAN (Game Mode) или BLE (`LOVENSE_SERVICE_MODE`); задачи по моторам, пресеты/паттерны, `/tasks`, пакетные стопы — **[руководство](tutorials/fastapi-lan-rest.md#fastapi-lan-rest-tutorial)** |
 
 Запуск с переменными окружения, например `LOVENSE_LAN_IP=192.168.1.100 python examples/lan_game_mode.py`

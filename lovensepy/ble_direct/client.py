@@ -24,6 +24,10 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from lovensepy._command_utils import (
+    actions_to_rule_letters,
+    clamp_time_sec_in_payload,
+)
 from lovensepy._constants import ERROR_CODES, PRESET_BLE_PAT_INDEX, Actions, Presets
 from lovensepy._models import CommandResponse, GetToyNameResponse, GetToysResponse, PatternV2Action
 from lovensepy.exceptions import LovenseBLEError
@@ -41,29 +45,6 @@ from .uart_catalog import (
     default_full_stop_payloads,
 )
 from .uart_replies import DeviceTypeFields, parse_battery_percent, parse_device_type_fields
-
-
-def _pattern_action_letter(action: str | Actions) -> str:
-    """Map action to pattern rule letter (same as :mod:`lovensepy.standard.async_lan`)."""
-    if isinstance(action, Actions):
-        action = str(action)
-    action = str(action).strip().lower()
-    mapping = {
-        "vibrate": "v",
-        "vibrate1": "v",
-        "vibrate2": "v",
-        "vibrate3": "v",
-        "rotate": "r",
-        "pump": "p",
-        "thrusting": "t",
-        "fingering": "f",
-        "suction": "s",
-        "depth": "d",
-        "oscillate": "o",
-        "stroke": "st",
-    }
-    return mapping.get(action, action[0] if action else "")
-
 
 # When ``time`` is 0 and ``open_ended`` is false, hold the preset this long before a stop burst.
 _DEFAULT_BLE_PRESET_HOLD_SEC = 12.0
@@ -253,17 +234,19 @@ _NOTIFY_PROPS = frozenset({"notify", "indicate"})
 _loop_locks: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock] = (
     weakref.WeakKeyDictionary()
 )
+_loop_locks_guard = threading.Lock()
 
 
 def _ble_connect_serializer() -> asyncio.Lock | None:
     if sys.platform != "darwin":
         return None
     loop = asyncio.get_running_loop()
-    lock = _loop_locks.get(loop)
-    if lock is None:
-        lock = asyncio.Lock()
-        _loop_locks[loop] = lock
-    return lock
+    with _loop_locks_guard:
+        lock = _loop_locks.get(loop)
+        if lock is None:
+            lock = asyncio.Lock()
+            _loop_locks[loop] = lock
+        return lock
 
 
 def _norm_uuid(u: str | uuidlib.UUID | Any) -> str:
@@ -1122,10 +1105,7 @@ class BleDirectClient(LovenseAsyncControlClient):
     # --- Standard API parity (async LAN–like control over UART) ---
 
     def _parse_command_payload(self, command_data: dict[str, Any]) -> dict[str, Any]:
-        cmd = dict(command_data)
-        if (ts := cmd.get("timeSec")) is not None and ts != 0:
-            cmd["timeSec"] = max(1.0, min(float(ts), 6000.0))
-        return cmd
+        return clamp_time_sec_in_payload(command_data)
 
     def _clamp_actions(self, actions: dict[str | Actions, int | float]) -> dict[str, int | float]:
         return ble_clamp_actions(actions)
@@ -1145,13 +1125,7 @@ class BleDirectClient(LovenseAsyncControlClient):
     def _actions_to_rule_letters(self, actions: list[str | Actions] | None) -> str:
         if not actions or Actions.ALL in actions:
             return ""
-        letters: list[str] = []
-        valid = {"v", "r", "p", "t", "f", "s", "d", "o", "st"}
-        for a in actions:
-            letter = _pattern_action_letter(a)
-            if letter and letter in valid and letter not in letters:
-                letters.append(letter)
-        return ",".join(letters) if letters else ""
+        return actions_to_rule_letters(actions)
 
     def _ble_command_response(self, *, uart: list[str] | None = None) -> CommandResponse:
         data: dict[str, Any] = {"transport": "ble"}

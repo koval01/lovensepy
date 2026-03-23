@@ -13,7 +13,12 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from .._constants import FUNCTION_RANGES, SERVER_ERROR_CODES, Actions, Presets
+from .._command_utils import (
+    actions_to_rule_letters,
+    clamp_function_actions,
+    clamp_time_sec_in_payload,
+)
+from .._constants import SERVER_ERROR_CODES, Actions, Presets
 from .._models import CommandResponse, GetToyNameResponse, GetToysResponse, PatternV2Action
 from ..exceptions import LovenseError, LovenseResponseParseError
 from ..transport import AsyncHttpTransport
@@ -26,39 +31,6 @@ SERVER_COMMAND_URL = "https://api.lovense-api.com/api/lan/v2/command"
 _ResponseModelT = TypeVar("_ResponseModelT", bound=BaseModel)
 
 _logger = py_logging.getLogger(__name__)
-
-
-def _action_letter_pattern(action: str | Actions) -> str:
-    if isinstance(action, Actions):
-        action = str(action)
-    action = str(action).strip().lower()
-    mapping = {
-        "vibrate": "v",
-        "vibrate1": "v",
-        "vibrate2": "v",
-        "vibrate3": "v",
-        "rotate": "r",
-        "pump": "p",
-        "thrusting": "t",
-        "fingering": "f",
-        "suction": "s",
-        "depth": "d",
-        "oscillate": "o",
-        "stroke": "st",
-    }
-    return mapping.get(action, action[0] if action else "")
-
-
-def _actions_to_rule_letters(actions: list[str | Actions] | None) -> str:
-    if not actions or Actions.ALL in actions:
-        return ""
-    letters: list[str] = []
-    valid = {"v", "r", "p", "t", "f", "s", "d", "o", "st"}
-    for a in actions:
-        letter = _action_letter_pattern(a)
-        if letter and letter in valid and letter not in letters:
-            letters.append(letter)
-    return ",".join(letters) if letters else ""
 
 
 class AsyncServerClient(LovenseAsyncControlClient):
@@ -111,11 +83,7 @@ class AsyncServerClient(LovenseAsyncControlClient):
     ) -> dict[str, Any]:
         """Send command to Lovense server API."""
         timeout = timeout or self.timeout
-        cmd = dict(command_data)
-
-        # Clamp timeSec for non-zero values (API constraint, same as LAN)
-        if (ts := cmd.get("timeSec")) is not None and ts != 0:
-            cmd["timeSec"] = max(1.0, min(float(ts), 6000.0))
+        cmd = clamp_time_sec_in_payload(command_data)
 
         payload = {**self._base_payload(), **cmd}
         self.last_command = payload
@@ -140,15 +108,7 @@ class AsyncServerClient(LovenseAsyncControlClient):
             ) from e
 
     def _clamp_actions(self, actions: dict[str | Actions, int | float]) -> dict[str, int | float]:
-        result: dict[str, int | float] = {}
-        for action, value in actions.items():
-            key = str(action)
-            if key in FUNCTION_RANGES:
-                lo, hi = FUNCTION_RANGES[key]
-                result[key] = int(max(lo, min(hi, value)))
-            else:
-                result[key] = value
-        return result
+        return clamp_function_actions(actions)
 
     def _parse_pattern_v2_actions(self, actions: list[dict[str, int]]) -> list[PatternV2Action]:
         """Parse and validate PatternV2 action dicts. Raises ValueError on invalid input."""
@@ -286,7 +246,7 @@ class AsyncServerClient(LovenseAsyncControlClient):
             pat = pattern[:50]
             pat = [min(max(0, n), 20) for n in pat]
             interval_clamped = min(max(interval, 100), 1000)
-            letters = _actions_to_rule_letters(act_list)
+            letters = actions_to_rule_letters(act_list)
             rule = (
                 f"V:1;F:{letters};S:{interval_clamped}#"
                 if letters

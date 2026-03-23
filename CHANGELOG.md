@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-03-24
+
+### Added
+
+- Internal :mod:`lovensepy._command_utils` helpers shared by LAN, Server, and BLE clients:
+  ``timeSec`` clamp, nested JSON parsing, pattern-rule letters, and function action clamping.
+- Unit tests for :class:`~lovensepy.services.fastapi.scheduler.ControlScheduler` concurrency and for
+  Darwin BLE connect-serializer lock reuse; expanded :file:`tests/run_all.py` phases (FastAPI service,
+  BLE scan/branding/marketing-firmware tests).
+
+### Changed
+
+- :class:`~lovensepy.services.fastapi.scheduler.ControlScheduler` uses an async state lock for
+  consistent task/meta/session bookkeeping under parallel HTTP handlers.
+- FastAPI service: shared helpers for ``LovenseError`` → HTTP 502, shutdown/scheduler errors, and
+  async task listing / session matching.
+- :class:`~lovensepy.transport.async_http.AsyncHttpTransport` guards lazy ``httpx.AsyncClient``
+  creation with a thread lock to avoid duplicate clients under concurrent first requests.
+
+### Fixed
+
+- macOS: thread-safe initialization of the per-event-loop BLE connect lock (CoreBluetooth
+  serialization) to avoid races when multiple coroutines connect at once.
+- Documentation appendix lists ``examples/ble_direct_send_uart_once.py``.
+
+### Deprecated / compatibility
+
+- Legacy Pydantic request payload classes in :mod:`lovensepy._models` remain in the module but are no
+  longer exported via ``__all__`` (runtime clients build dict payloads directly).
+
 ## [1.1.1] - 2026-03-23
 
 ### Added
@@ -99,7 +129,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial changelog entry for this release line; see Git history for earlier changes.
 
-[Unreleased]: https://github.com/koval01/lovensepy/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/koval01/lovensepy/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/koval01/lovensepy/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/koval01/lovensepy/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/koval01/lovensepy/releases/tag/v1.1.0
 [1.0.6]: https://github.com/koval01/lovensepy/releases/tag/v1.0.6

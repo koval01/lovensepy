@@ -15,7 +15,13 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ValidationError
 
-from .._constants import ERROR_CODES, FUNCTION_RANGES, Actions, Presets
+from .._command_utils import (
+    actions_to_rule_letters,
+    clamp_function_actions,
+    clamp_time_sec_in_payload,
+    parse_nested_json,
+)
+from .._constants import ERROR_CODES, Actions, Presets
 from .._models import (
     CommandResponse,
     GetToyNameResponse,
@@ -33,42 +39,6 @@ __all__ = ["AsyncLANClient", "LOVENSE_HTTPS_FINGERPRINT"]
 _ResponseModelT = TypeVar("_ResponseModelT", bound=BaseModel)
 
 _logger = py_logging.getLogger(__name__)
-
-
-def _parse_json(data: str | dict | list) -> dict[str, Any] | list | str:
-    """Recursively parse nested JSON strings into dicts."""
-    if isinstance(data, str):
-        try:
-            return json.loads(data)
-        except ValueError:
-            return data
-    if isinstance(data, dict):
-        return {k: _parse_json(v) for k, v in data.items()}
-    if isinstance(data, list):
-        return [_parse_json(item) for item in data]
-    return data
-
-
-def _action_letter(action: str | Actions) -> str:
-    """Map action to pattern rule letter. v,r,p,t,f,s,d,o,st."""
-    if isinstance(action, Actions):
-        action = str(action)
-    action = str(action).strip().lower()
-    mapping = {
-        "vibrate": "v",
-        "vibrate1": "v",
-        "vibrate2": "v",
-        "vibrate3": "v",
-        "rotate": "r",
-        "pump": "p",
-        "thrusting": "t",
-        "fingering": "f",
-        "suction": "s",
-        "depth": "d",
-        "oscillate": "o",
-        "stroke": "st",
-    }
-    return mapping.get(action, action[0] if action else "")
 
 
 class AsyncLANClient(LovenseAsyncControlClient):
@@ -175,10 +145,7 @@ class AsyncLANClient(LovenseAsyncControlClient):
 
     def _parse_command_payload(self, command_data: dict[str, Any]) -> dict[str, Any]:
         """Clamp timeSec for non-zero values (API constraint) and copy."""
-        cmd = dict(command_data)
-        if (ts := cmd.get("timeSec")) is not None and ts != 0:
-            cmd["timeSec"] = max(1.0, min(float(ts), 6000.0))
-        return cmd
+        return clamp_time_sec_in_payload(command_data)
 
     async def send_command(
         self,
@@ -201,7 +168,7 @@ class AsyncLANClient(LovenseAsyncControlClient):
                 )
 
         data = await self._transport.post(cmd, timeout=timeout, verify=verify)
-        parsed = _parse_json(data)
+        parsed = parse_nested_json(data)
         _logger.debug(self.decode_response(parsed))
         return parsed if isinstance(parsed, dict) else {"data": parsed}
 
@@ -222,15 +189,7 @@ class AsyncLANClient(LovenseAsyncControlClient):
 
     def _clamp_actions(self, actions: dict[str | Actions, int | float]) -> dict[str, int | float]:
         """Clamp action values to API ranges."""
-        result: dict[str, int | float] = {}
-        for action, value in actions.items():
-            key = str(action)
-            if key in FUNCTION_RANGES:
-                lo, hi = FUNCTION_RANGES[key]
-                result[key] = int(max(lo, min(hi, value)))
-            else:
-                result[key] = value
-        return result
+        return clamp_function_actions(actions)
 
     def _parse_pattern_v2_actions(self, actions: list[dict[str, int]]) -> list[PatternV2Action]:
         """Parse and validate PatternV2 action dicts. Raises ValueError on invalid input."""
@@ -306,15 +265,7 @@ class AsyncLANClient(LovenseAsyncControlClient):
 
     def _actions_to_rule_letters(self, actions: list[str | Actions] | None) -> str:
         """Convert actions to F:... rule part. Empty = all functions."""
-        if not actions or Actions.ALL in actions:
-            return ""
-        letters = []
-        valid = {"v", "r", "p", "t", "f", "s", "d", "o", "st"}
-        for a in actions:
-            letter = _action_letter(a)
-            if letter and letter in valid and letter not in letters:
-                letters.append(letter)
-        return ",".join(letters) if letters else ""
+        return actions_to_rule_letters(actions)
 
     async def pattern_request_raw(
         self,

@@ -40,6 +40,21 @@ from .scheduler import ControlScheduler
 from .util import as_dict, extract_toy_ids, gap_name_from_ble_advertisement_cache
 
 
+def _ensure_scheduler_open(scheduler: ControlScheduler) -> None:
+    if scheduler.closed:
+        raise HTTPException(status_code=503, detail="Server is shutting down.")
+
+
+def _raise_api_error(exc: Exception, *, value_error_status: int = 400) -> None:
+    if isinstance(exc, LovenseError):
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if isinstance(exc, ValueError):
+        raise HTTPException(status_code=value_error_status, detail=str(exc)) from exc
+    if isinstance(exc, RuntimeError) and str(exc) == "scheduler_closed":
+        raise HTTPException(status_code=503, detail="Server is shutting down.") from exc
+    raise exc
+
+
 async def _refresh_openapi_toy_ids(
     fastapi_instance: FastAPI, backend: LovenseControlBackend, cfg: ServiceConfig
 ) -> None:
@@ -174,13 +189,12 @@ def create_app(
     )
     async def list_tasks(request: Request) -> dict[str, Any]:
         scheduler: ControlScheduler = request.app.state.scheduler
-        return {"tasks": scheduler.list_tasks()}
+        return {"tasks": await scheduler.list_tasks()}
 
     @fastapi_app.post("/command/function")
     async def function_command(request: Request, payload: FunctionCommand) -> dict[str, Any]:
         scheduler: ControlScheduler = request.app.state.scheduler
-        if scheduler.closed:
-            raise HTTPException(status_code=503, detail="Server is shutting down.")
+        _ensure_scheduler_open(scheduler)
         try:
             return await scheduler.schedule_function(
                 payload.toy_id,
@@ -190,35 +204,22 @@ def create_app(
                 loop_on_time=payload.loop_on_time,
                 loop_off_time=payload.loop_off_time,
             )
-        except LovenseError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except RuntimeError as exc:
-            if str(exc) == "scheduler_closed":
-                raise HTTPException(status_code=503, detail="Server is shutting down.") from exc
-            raise
+        except Exception as exc:
+            _raise_api_error(exc)
 
     @fastapi_app.post("/command/preset")
     async def preset_command(request: Request, payload: PresetCommand) -> dict[str, Any]:
         scheduler: ControlScheduler = request.app.state.scheduler
         be: LovenseControlBackend = request.app.state.backend
-        if scheduler.closed:
-            raise HTTPException(status_code=503, detail="Server is shutting down.")
+        _ensure_scheduler_open(scheduler)
 
         preset_name = str(payload.name)
-        existing = scheduler.find_matching_preset_session(payload.toy_id, preset_name)
+        existing = await scheduler.find_matching_preset_session(payload.toy_id, preset_name)
         if existing:
             try:
                 return await scheduler.extend_session(existing, float(payload.time))
-            except LovenseError as exc:
-                raise HTTPException(status_code=502, detail=str(exc)) from exc
-            except ValueError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
-            except RuntimeError as exc:
-                if str(exc) == "scheduler_closed":
-                    raise HTTPException(status_code=503, detail="Server is shutting down.") from exc
-                raise
+            except Exception as exc:
+                _raise_api_error(exc, value_error_status=404)
 
         if payload.toy_id:
             await scheduler.cancel_every_slot_for_toy(payload.toy_id)
@@ -234,8 +235,8 @@ def create_app(
                     wait_for_completion=False,
                 )
             )
-        except LovenseError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except Exception as exc:
+            _raise_api_error(exc)
 
         try:
             response["scheduler_task_id"] = await scheduler.track_session(
@@ -246,17 +247,17 @@ def create_app(
             )
             response["renewed"] = False
             response["lovense_resent"] = True
-        except RuntimeError as exc:
-            if str(exc) != "scheduler_closed":
-                raise
+        except Exception as exc:
+            if isinstance(exc, RuntimeError) and str(exc) == "scheduler_closed":
+                return response
+            _raise_api_error(exc)
         return response
 
     @fastapi_app.post("/command/pattern")
     async def pattern_command(request: Request, payload: PatternCommand) -> dict[str, Any]:
         scheduler: ControlScheduler = request.app.state.scheduler
         be: LovenseControlBackend = request.app.state.backend
-        if scheduler.closed:
-            raise HTTPException(status_code=503, detail="Server is shutting down.")
+        _ensure_scheduler_open(scheduler)
 
         pattern = (
             payload.pattern
@@ -269,18 +270,12 @@ def create_app(
             actions=payload.actions,
             template=payload.template,
         )
-        existing = scheduler.find_matching_pattern_session(payload.toy_id, sig)
+        existing = await scheduler.find_matching_pattern_session(payload.toy_id, sig)
         if existing:
             try:
                 return await scheduler.extend_session(existing, float(payload.time))
-            except LovenseError as exc:
-                raise HTTPException(status_code=502, detail=str(exc)) from exc
-            except ValueError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
-            except RuntimeError as exc:
-                if str(exc) == "scheduler_closed":
-                    raise HTTPException(status_code=503, detail="Server is shutting down.") from exc
-                raise
+            except Exception as exc:
+                _raise_api_error(exc, value_error_status=404)
 
         if payload.toy_id:
             await scheduler.cancel_every_slot_for_toy(payload.toy_id)
@@ -300,8 +295,8 @@ def create_app(
                     wait_for_completion=False,
                 )
             )
-        except LovenseError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except Exception as exc:
+            _raise_api_error(exc)
 
         detail: dict[str, Any] = {
             "interval": payload.interval,
@@ -322,9 +317,10 @@ def create_app(
             )
             response["renewed"] = False
             response["lovense_resent"] = True
-        except RuntimeError as exc:
-            if str(exc) != "scheduler_closed":
-                raise
+        except Exception as exc:
+            if isinstance(exc, RuntimeError) and str(exc) == "scheduler_closed":
+                return response
+            _raise_api_error(exc)
         return response
 
     @fastapi_app.post("/command/stop/all")
