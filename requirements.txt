@@ -1,6 +1,4 @@
 # Legacy pip install list — mirrors [project] dependencies in pyproject.toml.
 # Prefer: pip install -e ".[dev]" or pip install lovensepy
-httpx>=0.27.0
-pydantic>=2.0.0
-websockets>=12.0
-hyperframe>=6.1.0
+aiohttp>=3.13.3
+pydantic>=2.12.5

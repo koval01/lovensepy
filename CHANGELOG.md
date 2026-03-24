@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-03-24
+
+### Changed
+
+- **HTTP** uses **aiohttp** end-to-end: sync :class:`~lovensepy.transport.http.HttpTransport`,
+  :class:`~lovensepy.transport.async_http.AsyncHttpTransport`, :func:`~lovensepy.socket_api.auth.get_token`,
+  :func:`~lovensepy.socket_api.auth.get_socket_url`, and :func:`~lovensepy.standard.server.get_qr_code` share
+  :func:`~lovensepy._aiohttp_helpers.read_response_json` so JSON bodies decode even when ``Content-Type`` is not
+  ``application/json`` (common on Lovense LAN ``/command``).
+- **WebSocket** transport (:class:`~lovensepy.transport.ws.WsTransport`) uses **aiohttp** instead of the **websockets**
+  package; direct runtime dependencies are now **aiohttp** and **pydantic** only (**websockets** and **hyperframe**
+  removed).
+
+### Fixed
+
+- WebSocket: keep a stable connection reference for the receive loop while :meth:`~lovensepy.transport.ws.WsTransport.close`
+  clears transport state, matching prior ``websockets`` behaviour and avoiding recv teardown races.
+- WebSocket: serialize all ``send_str`` calls with an :class:`asyncio.Lock` so concurrent Engine.IO frames (commands,
+  ping, handshake replies) do not corrupt or drop writes on aiohttp.
+
 ## [1.1.2] - 2026-03-24
 
 ### Added
@@ -20,7 +40,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   consistent task/meta/session bookkeeping under parallel HTTP handlers.
 - FastAPI service: shared helpers for ``LovenseError`` → HTTP 502, shutdown/scheduler errors, and
   async task listing / session matching.
-- :class:`~lovensepy.transport.async_http.AsyncHttpTransport` guards lazy ``httpx.AsyncClient``
+- :class:`~lovensepy.transport.async_http.AsyncHttpTransport` guards lazy ``aiohttp.ClientSession``
   creation with a thread lock to avoid duplicate clients under concurrent first requests.
 
 ### Fixed
@@ -129,7 +149,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial changelog entry for this release line; see Git history for earlier changes.
 
-[Unreleased]: https://github.com/koval01/lovensepy/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/koval01/lovensepy/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/koval01/lovensepy/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/koval01/lovensepy/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/koval01/lovensepy/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/koval01/lovensepy/releases/tag/v1.1.0

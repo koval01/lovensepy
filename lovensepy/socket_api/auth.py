@@ -5,8 +5,9 @@ Standard Socket API: getToken, getSocketUrl, build WebSocket URL.
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-import httpx
+import aiohttp
 
+from .._aiohttp_helpers import read_response_json, run_sync_coro, ssl_for_verify
 from .._http_identity import default_http_headers
 
 # Public Lovense API endpoints (not secrets)
@@ -36,7 +37,7 @@ def get_token(
 
     Raises:
         ValueError: If API rejects the request
-        httpx.HTTPError: On network errors
+        aiohttp.ClientError: On network or HTTP errors
     """
     payload: dict[str, Any] = {
         "token": developer_token,
@@ -47,10 +48,22 @@ def get_token(
     if utoken is not None:
         payload["utoken"] = utoken
 
-    with httpx.Client(timeout=timeout, headers=default_http_headers()) as client:
-        resp = client.post(GET_TOKEN_URL, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+    async def _fetch() -> dict[str, Any]:
+        client_timeout = aiohttp.ClientTimeout(total=timeout)
+        connector = aiohttp.TCPConnector(ssl=ssl_for_verify(True))
+        async with aiohttp.ClientSession(
+            connector=connector,
+            headers=default_http_headers(),
+        ) as session:
+            async with session.post(
+                GET_TOKEN_URL,
+                json=payload,
+                timeout=client_timeout,
+            ) as resp:
+                resp.raise_for_status()
+                return await read_response_json(resp)
+
+    data = run_sync_coro(_fetch())
     if data.get("code") != 0 or not data.get("data", {}).get("authToken"):
         raise ValueError(data.get("message", "Failed to get Lovense token"))
     return data["data"]["authToken"]
@@ -76,13 +89,26 @@ def get_socket_url(
     Raises:
         ValueError: If API rejects the token (e.g. "Developer information not found"
             means platform does not match your dashboard)
-        httpx.HTTPError: On network errors
+        aiohttp.ClientError: On network or HTTP errors
     """
     payload = {"authToken": auth_token, "platform": platform}
-    with httpx.Client(timeout=timeout, headers=default_http_headers()) as client:
-        resp = client.post(GET_SOCKET_URL, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+
+    async def _fetch() -> dict[str, Any]:
+        client_timeout = aiohttp.ClientTimeout(total=timeout)
+        connector = aiohttp.TCPConnector(ssl=ssl_for_verify(True))
+        async with aiohttp.ClientSession(
+            connector=connector,
+            headers=default_http_headers(),
+        ) as session:
+            async with session.post(
+                GET_SOCKET_URL,
+                json=payload,
+                timeout=client_timeout,
+            ) as resp:
+                resp.raise_for_status()
+                return await read_response_json(resp)
+
+    data = run_sync_coro(_fetch())
     # Success: code==0 or truthy result (API may use either)
     if data.get("code") != 0 and not data.get("result"):
         raise ValueError(data.get("message", "Lovense API rejected token"))

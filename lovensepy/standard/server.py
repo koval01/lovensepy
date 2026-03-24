@@ -13,9 +13,10 @@ import json
 import logging as py_logging
 from typing import Any, TypeVar, overload
 
-import httpx
+import aiohttp
 from pydantic import BaseModel, ValidationError
 
+from .._aiohttp_helpers import read_response_json, run_sync_coro, ssl_for_verify
 from .._command_utils import (
     actions_to_rule_letters,
     clamp_function_actions,
@@ -62,7 +63,7 @@ def get_qr_code(
 
     Raises:
         ValueError: If API rejects the request
-        httpx.HTTPError: On network errors
+        aiohttp.ClientError: On network or HTTP errors
 
     Security note:
         When utoken is omitted, the library uses MD5(uid) as required by the API.
@@ -82,10 +83,23 @@ def get_qr_code(
         payload["utoken"] = hashlib.md5(uid.encode(), usedforsecurity=False).hexdigest()
 
     form = {k: str(v) for k, v in payload.items()}
-    with httpx.Client(timeout=timeout, headers=default_http_headers()) as client:
-        resp = client.post(GET_QR_CODE_URL, data=form)
-        resp.raise_for_status()
-        data = resp.json()
+
+    async def _fetch() -> dict[str, Any]:
+        client_timeout = aiohttp.ClientTimeout(total=timeout)
+        connector = aiohttp.TCPConnector(ssl=ssl_for_verify(True))
+        async with aiohttp.ClientSession(
+            connector=connector,
+            headers=default_http_headers(),
+        ) as session:
+            async with session.post(
+                GET_QR_CODE_URL,
+                data=form,
+                timeout=client_timeout,
+            ) as resp:
+                resp.raise_for_status()
+                return await read_response_json(resp)
+
+    data = run_sync_coro(_fetch())
     if data.get("code") != 0 and not data.get("result"):
         raise ValueError(data.get("message", "Failed to get QR code"))
     if not data.get("data"):

@@ -2,7 +2,7 @@
 Async Standard API — By Server client.
 
 Async counterpart of :class:`lovensepy.standard.server.ServerClient` using
-``httpx.AsyncClient`` via :class:`lovensepy.transport.async_http.AsyncHttpTransport`.
+:class:`aiohttp.ClientSession` via :class:`lovensepy.transport.async_http.AsyncHttpTransport`.
 """
 
 from __future__ import annotations

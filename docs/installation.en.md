@@ -38,7 +38,7 @@ Direct BLE (installs `bleak` and `pick` for the interactive BLE example menu):
 pip install 'lovensepy[ble]'
 ```
 
-**Dependencies:** `httpx`, `pydantic`, `websockets`, `hyperframe`. Optional: `paho-mqtt` (via `[mqtt]`), `bleak` + `pick` (via `[ble]`).
+**Dependencies:** `aiohttp`, `pydantic`. Optional: `paho-mqtt` (via `[mqtt]`), `bleak` + `pick` (via `[ble]`).
 
 ## Quick start (Game Mode)
 

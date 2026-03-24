@@ -1,20 +1,18 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=82.0.0", "wheel>=0.46.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "lovensepy"
-version = "1.1.2"
+version = "1.1.3"
 description = "Python Lovense API client"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 authors = [{name = "LovensePy contributors", email = "git@koval-dev.org"}]
 requires-python = ">=3.12"
 dependencies = [
-    "httpx>=0.27.0",
-    "pydantic>=2.0.0",
-    "websockets>=12.0",
-    "hyperframe>=6.1.0",
+    "aiohttp>=3.13.3",
+    "pydantic>=2.12.5",
 ]
 keywords = ["lovense", "api", "iot", "teledildonics", "asyncio", "sdk", "mqtt", "home-assistant", "ble"]
 classifiers = [
@@ -33,33 +31,33 @@ mqtt = [
 ]
 ble = [
     "bleak>=0.22.0",
-    "pick>=2.2.0",
+    "pick>=2.6.0",
 ]
 service = [
     "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
+    "uvicorn[standard]>=0.42.0",
 ]
 dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.23.0",
-    "pytest-cov>=4.0",
-    "ruff>=0.8.0",
-    "pylint>=3.3.0",
-    "bandit>=1.8.0",
-    "pip-audit>=2.7.0",
-    "build>=1.0.0",
+    "pytest>=9.0.0",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.15.0",
+    "pylint>=4.0.0",
+    "bandit>=1.9.0",
+    "pip-audit>=2.7.0,<2.10",
+    "build>=1.4.0",
     "paho-mqtt>=2.1.0",
     "bleak>=0.22.0",
-    "pick>=2.2.0",
+    "pick>=2.6.0",
     "semgrep>=1.100.0",
     "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
+    "uvicorn[standard]>=0.42.0",
 ]
 docs = [
-    "mkdocs>=1.6.0",
-    "mkdocs-material>=9.5.0",
-    "mkdocs-static-i18n>=1.3.0",
-    "pymdown-extensions>=10.0",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.0",
+    "mkdocs-static-i18n>=1.3.1",
+    "pymdown-extensions>=10.21.0",
 ]
 
 [project.urls]

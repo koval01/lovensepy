@@ -597,7 +597,7 @@ LovenseError
 └── LovenseNetworkError          # .endpoint, .payload
     ├── LovenseAuthError         # HTTP 401 / 403
     ├── LovenseDeviceOfflineError
-    │   ├── LovenseTimeoutError  # таймаут HTTP-клиента (httpx)
+    │   ├── LovenseTimeoutError  # таймаут HTTP-клиента (aiohttp)
     │   └── LovenseBLEError      # BLE / GATT, нет bleak, не подключено
     └── LovenseResponseParseError
 ```
@@ -607,7 +607,7 @@ LovenseError
 | Ситуация | Исключение | Примечание |
 |-----------|------------|------------|
 | Неверный/просроченный токен, запрещено | `LovenseAuthError` | `HttpTransport` / async при статусе **401** или **403**. |
-| Приложение недоступно, отказ в соединении | `LovenseDeviceOfflineError` | `httpx.ConnectError` — не то же самое, что таймаут. |
+| Приложение недоступно, отказ в соединении | `LovenseDeviceOfflineError` | Ошибки соединения aiohttp (например `ClientConnectorError`) — не то же самое, что таймаут. |
 | Запрос слишком долгий | `LovenseTimeoutError` | Подкласс `LovenseDeviceOfflineError` — ловите **раньше** родителя, если нужен отдельный сценарий. |
 | Другой HTTP (не 200 и не 401/403) | `LovenseNetworkError` | Общий сбой транспорта/HTTP. |
 | Тело ответа не JSON | `LovenseResponseParseError` | |

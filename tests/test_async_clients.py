@@ -109,27 +109,40 @@ def test_async_lan_fingerprint_verification_is_serialized(monkeypatch):
 
 def test_async_http_transport_reuses_clients_and_closes(monkeypatch):
     async def _runner():
-        class FakeAsyncClient:
-            def __init__(self, verify, timeout):  # type: ignore[no-untyped-def]
-                self.verify = verify
-                self.timeout = timeout
+        class FakePostCM:
+            status = 200
+
+            async def __aenter__(self):  # type: ignore[no-untyped-def]
+                return self
+
+            async def __aexit__(self, *args):  # type: ignore[no-untyped-def]
+                return None
+
+            async def json(self):  # type: ignore[no-untyped-def]
+                return {}
+
+        class FakeClientSession:
+            def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
                 self.closed = False
 
-            async def aclose(self):
+            def post(self, url, **kwargs):  # type: ignore[no-untyped-def]
+                return FakePostCM()
+
+            async def close(self):  # type: ignore[no-untyped-def]
                 self.closed = True
 
-        monkeypatch.setattr(async_http_module.httpx, "AsyncClient", FakeAsyncClient)
+        monkeypatch.setattr(async_http_module.aiohttp, "ClientSession", FakeClientSession)
 
         transport = AsyncHttpTransport("http://127.0.0.1:20011/command", timeout=2.0)
-        client_a = transport._get_client(True)
-        client_b = transport._get_client(True)
-        client_c = transport._get_client(False)
+        session_a = transport._get_session(True)
+        session_b = transport._get_session(True)
+        session_c = transport._get_session(False)
 
-        assert client_a is client_b
-        assert client_a is not client_c
-        assert len(transport._clients) == 2
+        assert session_a is session_b
+        assert session_a is not session_c
+        assert len(transport._sessions) == 2
 
         await transport.aclose()
-        assert transport._clients == {}
+        assert transport._sessions == {}
 
     asyncio.run(_runner())

@@ -2,7 +2,7 @@
 Async Standard API — LAN (Game Mode) client.
 
 This mirrors :class:`lovensepy.standard.lan.LANClient` but performs HTTP calls
-using ``httpx.AsyncClient`` via :class:`lovensepy.transport.async_http.AsyncHttpTransport`.
+using :class:`aiohttp.ClientSession` via :class:`lovensepy.transport.async_http.AsyncHttpTransport`.
 """
 
 from __future__ import annotations

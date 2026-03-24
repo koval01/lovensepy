@@ -597,7 +597,7 @@ LovenseError
 └── LovenseNetworkError          # .endpoint, .payload
     ├── LovenseAuthError         # HTTP 401 / 403 (wrong token, forbidden)
     ├── LovenseDeviceOfflineError
-    │   ├── LovenseTimeoutError  # HTTP client timeout (httpx)
+    │   ├── LovenseTimeoutError  # HTTP client timeout (aiohttp)
     │   └── LovenseBLEError      # BLE / GATT, missing bleak, not connected
     └── LovenseResponseParseError
 ```
@@ -607,7 +607,7 @@ LovenseError
 | Situation | Exception | Notes |
 |-----------|-----------|--------|
 | Wrong or expired developer token, forbidden | `LovenseAuthError` | From `HttpTransport` / async transport on status **401** or **403**. |
-| App unreachable, connection refused, DNS failure | `LovenseDeviceOfflineError` | `httpx.ConnectError` → not the same as timeout. |
+| App unreachable, connection refused, DNS failure | `LovenseDeviceOfflineError` | Connection errors from aiohttp (e.g. `ClientConnectorError`) — not the same as timeout. |
 | Request took too long | `LovenseTimeoutError` | Subclass of `LovenseDeviceOfflineError` — use `isinstance(e, LovenseTimeoutError)` **before** the parent if you want separate handling. |
 | Other HTTP failures (non-200 not 401/403) | `LovenseNetworkError` | Generic transport/HTTP issue. |
 | Body is not valid JSON | `LovenseResponseParseError` | |

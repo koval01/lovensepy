@@ -38,7 +38,7 @@ pip install 'lovensepy[mqtt]'
 pip install 'lovensepy[ble]'
 ```
 
-**Зависимости:** `httpx`, `pydantic`, `websockets`, `hyperframe`. Опционально: `paho-mqtt` (через `[mqtt]`), `bleak` + `pick` (через `[ble]`).
+**Зависимости:** `aiohttp`, `pydantic`. Опционально: `paho-mqtt` (через `[mqtt]`), `bleak` + `pick` (через `[ble]`).
 
 ## Быстрый старт (Game Mode)
 

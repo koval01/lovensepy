@@ -8,33 +8,34 @@ import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
-import websockets
-from websockets.exceptions import ConnectionClosed, InvalidState, WebSocketException
-
-try:
-    from websockets.protocol import State
-
-    OPEN = State.OPEN
-except ImportError:
-    from websockets.protocol import OPEN
+import aiohttp
+from aiohttp import WSMsgType
 
 __all__ = ["WsTransport"]
 
 
-async def _close_ws(ws: Any) -> None:
-    try:
-        await ws.close()
-    except (OSError, WebSocketException, ConnectionClosed, InvalidState):
-        pass
+async def _close_transport(
+    session: aiohttp.ClientSession | None,
+    ws: aiohttp.ClientWebSocketResponse | None,
+) -> None:
+    if ws is not None and not ws.closed:
+        try:
+            await ws.close()
+        except (OSError, aiohttp.ClientError):
+            pass
+    if session is not None and not session.closed:
+        try:
+            await session.close()
+        except (OSError, aiohttp.ClientError):
+            pass
 
 
 def _is_open(ws: Any) -> bool:
-    """Check if WebSocket is open. Compatible with websockets 12 and 16+."""
+    """True if aiohttp client WebSocket is connected."""
     if ws is None:
         return False
-    if hasattr(ws, "open"):
-        return bool(ws.open)
-    return getattr(ws, "state", None) is OPEN
+    closed = getattr(ws, "closed", True)
+    return not bool(closed)
 
 
 class WsTransport:
@@ -56,7 +57,9 @@ class WsTransport:
         self._headers = headers or {}
         self._open_timeout = open_timeout
         self._close_timeout = close_timeout
-        self._ws: Any | None = None
+        self._session: aiohttp.ClientSession | None = None
+        self._ws: aiohttp.ClientWebSocketResponse | None = None
+        self._send_lock = asyncio.Lock()
 
     @property
     def url(self) -> str:
@@ -73,40 +76,73 @@ class WsTransport:
         Connect to WebSocket. Returns True on success, False on error.
         """
         self.close()
+        session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(sock_connect=self._open_timeout),
+        )
         try:
-            self._ws = await websockets.connect(
+            ws = await session.ws_connect(
                 self._url,
-                additional_headers=self._headers,
-                ping_interval=None,
-                ping_timeout=None,
-                close_timeout=self._close_timeout,
-                open_timeout=self._open_timeout,
+                headers=self._headers or None,
+                timeout=aiohttp.ClientWSTimeout(
+                    ws_close=self._close_timeout,
+                    ws_receive=None,
+                ),
+                autoping=True,
             )
-            return True
-        except (OSError, WebSocketException):
-            self._ws = None
+        except (
+            OSError,
+            TimeoutError,
+            aiohttp.ClientError,
+            aiohttp.WSServerHandshakeError,
+        ):
+            await session.close()
             return False
 
+        self._session = session
+        self._ws = ws
+        return True
+
     async def send(self, message: str) -> bool:
-        """Send text message. Returns False if not connected or send failed."""
-        if not _is_open(self._ws):
-            return False
-        try:
-            await self._ws.send(message)
-            return True
-        except (OSError, ConnectionClosed, InvalidState):
-            return False
+        """Send text message. Returns False if not connected or send failed.
+
+        aiohttp (like most asyncio WS clients) must not interleave concurrent ``send_str``
+        calls; SocketAPIClient may schedule many sends via ``create_task``, and the ping
+        loop runs in parallel, so all writes go through this lock.
+        """
+        async with self._send_lock:
+            ws = self._ws
+            if not _is_open(ws):
+                return False
+            try:
+                await ws.send_str(message)
+                return True
+            except (OSError, TypeError, aiohttp.ClientError, ConnectionResetError):
+                return False
 
     async def receive(self) -> AsyncIterator[str]:
         """Async iterator of received text messages."""
-        if not self._ws:
+        # Hold the socket for the whole loop: disconnect() clears ``self._ws`` while the
+        # recv task may still be running (websockets ``async for`` kept the same behavior).
+        ws = self._ws
+        if not ws:
             return
         try:
-            async for msg in self._ws:
-                if isinstance(msg, bytes):
-                    msg = msg.decode("utf-8")
-                yield msg
-        except websockets.ConnectionClosed:
+            while True:
+                msg = await ws.receive()
+                if msg.type == WSMsgType.TEXT:
+                    yield msg.data
+                elif msg.type == WSMsgType.BINARY:
+                    yield msg.data.decode("utf-8")
+                elif msg.type in (
+                    WSMsgType.CLOSE,
+                    WSMsgType.CLOSING,
+                    WSMsgType.CLOSED,
+                    WSMsgType.ERROR,
+                ):
+                    break
+        except asyncio.CancelledError:
+            raise
+        except (OSError, aiohttp.ClientError):
             pass
 
     def close(self) -> None:
@@ -116,15 +152,18 @@ class WsTransport:
         teardown), runs a short ``asyncio.run`` close so the socket is not left open
         until GC.
         """
+        session = self._session
         ws = self._ws
+        self._session = None
         self._ws = None
-        if ws and _is_open(ws):
+        if session is None and ws is None:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+            loop.call_soon_threadsafe(lambda: asyncio.create_task(_close_transport(session, ws)))
+        except RuntimeError:
             try:
-                loop = asyncio.get_running_loop()
-                loop.call_soon_threadsafe(lambda: asyncio.create_task(_close_ws(ws)))
+                asyncio.run(_close_transport(session, ws))
             except RuntimeError:
-                try:
-                    asyncio.run(_close_ws(ws))
-                except RuntimeError:
-                    # Nested event-loop edge case; best-effort only.
-                    pass
+                # Nested event-loop edge case; best-effort only.
+                pass

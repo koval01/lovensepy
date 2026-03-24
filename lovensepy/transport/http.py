@@ -6,8 +6,9 @@ import json
 import logging as py_logging
 from typing import Any
 
-import httpx
+import aiohttp
 
+from .._aiohttp_helpers import read_response_json, run_sync_coro, ssl_for_verify
 from .._http_identity import merge_http_headers
 from ..exceptions import (
     LovenseAuthError,
@@ -41,6 +42,68 @@ class HttpTransport:
         self.timeout = timeout
         self.verify = verify
 
+    async def _post_async(
+        self,
+        payload: dict[str, Any],
+        timeout: float,
+        verify: bool,
+    ) -> dict[str, Any]:
+        connector = aiohttp.TCPConnector(ssl=ssl_for_verify(verify))
+        client_timeout = aiohttp.ClientTimeout(total=timeout)
+        try:
+            async with aiohttp.ClientSession(connector=connector, headers=self.headers) as session:
+                async with session.post(
+                    self.endpoint,
+                    json=payload,
+                    timeout=client_timeout,
+                ) as resp:
+                    status = resp.status
+                    try:
+                        data = await read_response_json(resp)
+                    except (json.JSONDecodeError, ValueError, aiohttp.ContentTypeError) as e:
+                        raise LovenseResponseParseError(
+                            f"Failed to decode JSON response from {self.endpoint}",
+                            endpoint=self.endpoint,
+                            payload=payload,
+                        ) from e
+        except aiohttp.ClientConnectorError as e:
+            _logger.debug("HTTP connect error: %s", e)
+            raise LovenseDeviceOfflineError(
+                f"Failed to connect to {self.endpoint}",
+                endpoint=self.endpoint,
+                payload=payload,
+            ) from e
+        except (TimeoutError, aiohttp.ServerTimeoutError) as e:
+            _logger.debug("HTTP timeout: %s", e)
+            raise LovenseTimeoutError(
+                f"Timed out while calling {self.endpoint}",
+                endpoint=self.endpoint,
+                payload=payload,
+            ) from e
+        except aiohttp.ClientError as e:
+            _logger.debug("HTTP request error: %s", e)
+            raise LovenseNetworkError(
+                f"HTTP request failed for {self.endpoint}",
+                endpoint=self.endpoint,
+                payload=payload,
+            ) from e
+
+        if status != 200:
+            if status in (401, 403):
+                raise LovenseAuthError(
+                    f"Authentication failed (HTTP {status}) for {self.endpoint}",
+                    endpoint=self.endpoint,
+                    payload=payload,
+                )
+            _logger.debug("HTTP non-200 status: %s", status)
+            raise LovenseNetworkError(
+                f"Non-200 response (HTTP {status}) for {self.endpoint}",
+                endpoint=self.endpoint,
+                payload=payload,
+            )
+
+        return data
+
     def post(
         self,
         payload: dict[str, Any],
@@ -55,54 +118,4 @@ class HttpTransport:
 
         _logger.debug("HTTP payload: %s", payload)
 
-        try:
-            with httpx.Client(verify=verify, timeout=timeout) as client:
-                resp = client.post(
-                    self.endpoint,
-                    json=payload,
-                    headers=self.headers,
-                )
-        except httpx.ConnectError as e:
-            _logger.debug("HTTP connect error: %s", e)
-            raise LovenseDeviceOfflineError(
-                f"Failed to connect to {self.endpoint}",
-                endpoint=self.endpoint,
-                payload=payload,
-            ) from e
-        except httpx.TimeoutException as e:
-            _logger.debug("HTTP timeout: %s", e)
-            raise LovenseTimeoutError(
-                f"Timed out while calling {self.endpoint}",
-                endpoint=self.endpoint,
-                payload=payload,
-            ) from e
-        except httpx.HTTPError as e:
-            _logger.debug("HTTP request error: %s", e)
-            raise LovenseNetworkError(
-                f"HTTP request failed for {self.endpoint}",
-                endpoint=self.endpoint,
-                payload=payload,
-            ) from e
-
-        if resp.status_code != 200:
-            if resp.status_code in (401, 403):
-                raise LovenseAuthError(
-                    f"Authentication failed (HTTP {resp.status_code}) for {self.endpoint}",
-                    endpoint=self.endpoint,
-                    payload=payload,
-                )
-            _logger.debug("HTTP non-200 status: %s", resp.status_code)
-            raise LovenseNetworkError(
-                f"Non-200 response (HTTP {resp.status_code}) for {self.endpoint}",
-                endpoint=self.endpoint,
-                payload=payload,
-            )
-
-        try:
-            return resp.json()
-        except (json.JSONDecodeError, ValueError) as e:
-            raise LovenseResponseParseError(
-                f"Failed to decode JSON response from {self.endpoint}",
-                endpoint=self.endpoint,
-                payload=payload,
-            ) from e
+        return run_sync_coro(self._post_async(payload, timeout, verify))
