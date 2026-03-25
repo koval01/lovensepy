@@ -84,6 +84,8 @@ known-first-party = ["lovensepy"]
 [tool.ruff.lint.per-file-ignores]
 "lovensepy/ble_direct/client.py" = ["E501"]
 "lovensepy/ble_direct/standard_compat.py" = ["E501"]
+# ensure_pypi_fastapi() must run before any `from fastapi...` (Nuitka / import order).
+"lovensepy/services/http_api/app.py" = ["E402"]
 
 [tool.setuptools.package-data]
 lovensepy = ["py.typed"]

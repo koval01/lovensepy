@@ -21,7 +21,8 @@ disable=
     global-variable-not-assigned,
     unused-argument,
     try-except-raise,
-    line-too-long
+    line-too-long,
+    undefined-all-variable
 
 [FORMAT]
 max-line-length=100

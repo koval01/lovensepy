@@ -28,7 +28,7 @@ def mock_lan(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     backend.stop = AsyncMock(return_value=ok)
     backend.aclose = AsyncMock()
     monkeypatch.setattr(
-        "lovensepy.services.fastapi.app.AsyncLANClient",
+        "lovensepy.services.http_api.app.AsyncLANClient",
         lambda *args, **kwargs: backend,
     )
     return backend
@@ -144,7 +144,7 @@ def test_ble_scan_merges_into_advertisements_cache(
         ]
 
     monkeypatch.setattr(
-        "lovensepy.services.fastapi.app.scan_lovense_ble_advertisements",
+        "lovensepy.services.http_api.app.scan_lovense_ble_advertisements",
         fake_scan,
     )
     cfg = ServiceConfig(mode="ble")

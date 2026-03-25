@@ -1,0 +1,53 @@
+name: Build Windows exe
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: windows-exe-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[service,ble]"
+          pip install "nuitka[onefile]"
+
+      - name: Build onefile with Nuitka
+        run: |
+          python scripts/build_nuitka.py
+
+      - name: Write SHA256 checksums (dist-nuitka)
+        run: python scripts/write_build_checksums.py dist-nuitka
+
+      - name: Checksums — job summary
+        run: |
+          echo "### SHA256 (\`dist-nuitka\`)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat dist-nuitka/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lovensepy-service-windows
+          path: dist-nuitka/
+          if-no-files-found: error
+

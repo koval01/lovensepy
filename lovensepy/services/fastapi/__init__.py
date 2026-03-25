@@ -1,21 +1,13 @@
-"""FastAPI HTTP service: LAN (Game Mode) or direct BLE.
+"""Backward-compatibility shim.
 
-Part of :mod:`lovensepy.services`. Install optional extra: ``pip install 'lovensepy[service]'``.
+The service implementation was moved to :mod:`lovensepy.services.http_api` to avoid
+name collisions with the external `fastapi` package in standalone build tools.
 """
 
 from __future__ import annotations
 
-from lovensepy.standard.async_base import LovenseAsyncControlClient
+from lovensepy.services import http_api
+from lovensepy.services.http_api import *  # noqa: F403 pylint: disable=wildcard-import,unused-wildcard-import
+from lovensepy.services.http_api.app import app
 
-from .app import create_app
-from .backend import LovenseControlBackend
-from .config import ServiceConfig
-from .scheduler import ControlScheduler
-
-__all__ = [
-    "create_app",
-    "ControlScheduler",
-    "LovenseAsyncControlClient",
-    "LovenseControlBackend",
-    "ServiceConfig",
-]
+__all__ = [*http_api.__all__, "app"]

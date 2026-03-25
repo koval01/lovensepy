@@ -1,0 +1,159 @@
+name: Build main packages (nightly)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-main-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos-arm64:
+    name: Build macOS arm64 (DMG)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: "arm64"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[service,ble]"
+          pip install "nuitka[onefile]"
+
+      # Avoid Nuitka downloading its own ccache from nuitka.net (extra network + time; flaky under load).
+      - name: Install ccache (Nuitka C backend)
+        run: brew install ccache
+
+      - name: Build (Nuitka app) + DMG
+        run: |
+          python scripts/build_nuitka.py
+          codesign --force --sign - --deep --preserve-metadata=entitlements dist-nuitka/launcher.app
+          bash scripts/package_macos_dmg.sh
+
+      - name: Rename output with commit sha
+        run: |
+          SHA7="${GITHUB_SHA::7}"
+          mv "dist-nuitka/lovensepy-service-macos-arm64.dmg" "dist-nuitka/lovensepy-service-macos-arm64-${SHA7}.dmg"
+          echo "DMG_NAME=lovensepy-service-macos-arm64-${SHA7}.dmg" >> "$GITHUB_ENV"
+
+      - name: Write SHA256 for DMG artifact
+        run: python scripts/write_build_checksums.py --release-assets dist-nuitka
+
+      - name: Checksums — job summary
+        run: |
+          echo "### SHA256 (macOS DMG)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat dist-nuitka/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-dmg
+          path: |
+            dist-nuitka/${{ env.DMG_NAME }}
+            dist-nuitka/SHA256SUMS
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows (EXE)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[service,ble]"
+          pip install "nuitka[onefile]"
+
+      - name: Build (Nuitka onefile)
+        run: |
+          python scripts/build_nuitka.py
+
+      - name: Rename output with commit sha
+        shell: bash
+        run: |
+          SHA7="${GITHUB_SHA::7}"
+          # Nuitka onefile creates an .exe on Windows.
+          mv "dist-nuitka/lovensepy-service.exe" "dist-nuitka/lovensepy-service-windows-${SHA7}.exe"
+          echo "EXE_NAME=lovensepy-service-windows-${SHA7}.exe" >> "$GITHUB_ENV"
+
+      - name: Write SHA256 for exe artifact
+        run: python scripts/write_build_checksums.py --release-assets dist-nuitka
+
+      - name: Checksums — job summary
+        run: |
+          echo "### SHA256 (Windows exe)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat dist-nuitka/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: |
+            dist-nuitka/${{ env.EXE_NAME }}
+            dist-nuitka/SHA256SUMS
+          if-no-files-found: error
+
+  publish-nightly:
+    name: Publish nightly release assets
+    runs-on: ubuntu-latest
+    needs: [build-macos-arm64, build-windows]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: |
+          ls -la artifacts
+          find artifacts -maxdepth 3 -type f -print
+
+      - name: Write combined SHA256SUMS for release
+        run: |
+          python scripts/write_build_checksums.py --release-assets artifacts -o artifacts/SHA256SUMS
+
+      - name: Checksums — job summary
+        run: |
+          echo "### SHA256 (nightly release assets)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Verify after download: \`sha256sum -c SHA256SUMS\` (GNU coreutils) or compare hashes manually." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish/update prerelease "nightly-main"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly-main
+          name: Nightly (main) - ${{ github.sha }}
+          prerelease: true
+          generate_release_notes: false
+          files: |
+            artifacts/macos-arm64-dmg/*.dmg
+            artifacts/windows-exe/*.exe
+            artifacts/SHA256SUMS
+
