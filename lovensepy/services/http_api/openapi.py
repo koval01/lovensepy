@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi.applications import FastAPI
 from fastapi.openapi.utils import get_openapi
 
 

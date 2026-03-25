@@ -20,7 +20,9 @@ __pycache__/
 # Distribution / packaging
 build/
 dist/
+dist-nuitka/
 local/
+nuitka-crash-report.xml
 
 # MkDocs
 /site/

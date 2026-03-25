@@ -67,5 +67,6 @@ jobs:
           semgrep scan --config auto lovensepy --error \
             --exclude-rule python.lang.compatibility.python37.python37-compatibility-importlib2
 
+      # pygments (via pytest/rich): GHSA-5239-wwwm-4pmq — no fixed release on PyPI yet (checked 2026-03-25).
       - name: Check dependencies for vulnerabilities
-        run: pip-audit
+        run: pip-audit --ignore-vuln GHSA-5239-wwwm-4pmq

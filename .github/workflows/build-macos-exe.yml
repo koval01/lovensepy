@@ -1,0 +1,69 @@
+name: Build macOS arm64 exe/app
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: macos-exe-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: "arm64"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[service,ble]"
+          pip install "nuitka[onefile]"
+
+      # Avoid Nuitka downloading its own ccache from nuitka.net (extra network + time; flaky under load).
+      - name: Install ccache (Nuitka C backend)
+        run: brew install ccache
+
+      - name: Build onefile with Nuitka
+        run: |
+          python scripts/build_nuitka.py
+
+      - name: Ad-hoc codesign (free, best-effort)
+        run: |
+          APP_PATH="$(pwd)/dist-nuitka/launcher.app"
+          echo "Signing app bundle: $APP_PATH"
+          test -d "$APP_PATH"
+          codesign --force --sign - --deep --preserve-metadata=entitlements "$APP_PATH"
+
+      - name: Package DMG
+        run: |
+          bash scripts/package_macos_dmg.sh
+
+      - name: Write SHA256 checksums (dist-nuitka)
+        run: python scripts/write_build_checksums.py dist-nuitka
+
+      - name: Checksums — job summary
+        run: |
+          echo "### SHA256 (\`dist-nuitka\`)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat dist-nuitka/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lovensepy-service-macos-arm64
+          path: dist-nuitka/
+          if-no-files-found: error
+
