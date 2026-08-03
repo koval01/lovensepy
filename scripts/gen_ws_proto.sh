@@ -16,6 +16,16 @@ fi
   --python_out="$PY_OUT" \
   "$PROTO_DIR/ws.proto"
 
+# Keep pylint away from protoc output (dynamic stubs + 2-space indent).
+PY_STUB="$PY_OUT/ws_pb2.py"
+HEADER='# Generated from proto/ws.proto — do not edit by hand.
+# Regenerate: ./scripts/gen_ws_proto.sh
+# pylint: skip-file'
+if ! grep -q '# pylint: skip-file' "$PY_STUB"; then
+  printf '%s\n%s\n' "$HEADER" "$(cat "$PY_STUB")" >"$PY_STUB.tmp"
+  mv "$PY_STUB.tmp" "$PY_STUB"
+fi
+
 cd "$ROOT/frontend"
 npx protoc \
   --plugin=protoc-gen-es=./node_modules/.bin/protoc-gen-es \

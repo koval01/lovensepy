@@ -22,49 +22,15 @@ from starlette.datastructures import Headers
 from starlette.types import Scope
 from starlette.websockets import WebSocket
 
-from .access_gate import client_ip, is_external_request
+from .ua_labels import browser_label, device_label
 
 Role = Literal["host", "remote"]
 
 CLIENT_HEADER = "x-lovensepy-client"
 _STALE_SEC = 45.0
 
-
-def device_label(user_agent: str | None) -> str:
-    ua = (user_agent or "").lower()
-    if not ua:
-        return "Unknown device"
-    if "iphone" in ua:
-        return "iPhone"
-    if "ipad" in ua:
-        return "iPad"
-    if "android" in ua:
-        return "Android"
-    if "macintosh" in ua or "mac os" in ua:
-        return "Mac"
-    if "windows" in ua:
-        return "Windows"
-    if "cros" in ua:
-        return "Chromebook"
-    if "linux" in ua:
-        return "Linux"
-    return "Unknown device"
-
-
-def browser_label(user_agent: str | None) -> str:
-    ua_l = (user_agent or "").lower()
-    if not ua_l:
-        return "Unknown browser"
-    # Order matters: Edg/Chrome/Safari share substrings.
-    if "edg/" in ua_l or "edgios/" in ua_l:
-        return "Edge"
-    if "crios/" in ua_l or ("chrome/" in ua_l and "chromium" not in ua_l):
-        return "Chrome"
-    if "firefox/" in ua_l or "fxios/" in ua_l:
-        return "Firefox"
-    if "safari/" in ua_l and "chrome" not in ua_l and "crios" not in ua_l:
-        return "Safari"
-    return "Browser"
+# Re-export for tests / callers that imported labels from this module.
+__all__ = ("PresenceClient", "PresenceHub", "browser_label", "device_label")
 
 
 def _country_from_headers(headers: Headers) -> str | None:
@@ -108,6 +74,8 @@ class PresenceHub:
 
     @staticmethod
     def role_for_scope(scope: Scope, headers: Headers | None = None) -> Role:
+        from .access_gate import is_external_request
+
         return "remote" if is_external_request(scope, headers) else "host"
 
     async def connect(
@@ -116,6 +84,8 @@ class PresenceHub:
         *,
         preferred_id: str | None = None,
     ) -> PresenceClient:
+        from .access_gate import client_ip
+
         headers = Headers(scope=socket.scope)
         role = self.role_for_scope(socket.scope, headers)
         client_id = (preferred_id or "").strip()[:64] or secrets.token_urlsafe(12)

@@ -463,7 +463,7 @@ class ControlScheduler:
         lock = self._lock_for(toy_id)
 
         # Continuous hold (slider / level set until stopped).
-        if duration <= 0 and level > 0:
+        if duration <= 0 < level:
             async with lock:
                 async with self._state_lock:
                     existing = self._tasks.get(key)

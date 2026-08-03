@@ -128,10 +128,10 @@ def is_external_request(scope: Scope, headers: Headers | None = None) -> bool:
         # Public DNS name (duckdns, ddns, …) — not a LAN share.
         return True
 
-    client_ip = _client_ip(scope, hdrs)
+    peer = _client_ip(scope, hdrs)
     # Only real public IP literals count. TestClient uses a hostname like
     # "testclient" which is not an address and must not trip the gate.
-    if client_ip and _is_ip_literal(client_ip) and not _is_private_ip(client_ip):
+    if peer and _is_ip_literal(peer) and not _is_private_ip(peer):
         return True
     return False
 
@@ -309,7 +309,7 @@ class AccessGate:
         request_id: str | None = None,
     ) -> dict[str, Any]:
         """Register (or reuse) a host-approval request for a tunnel visitor."""
-        from .presence import browser_label, device_label
+        from .ua_labels import browser_label, device_label
 
         now = time.monotonic()
         self._purge_approvals(now)

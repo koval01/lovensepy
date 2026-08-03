@@ -1,5 +1,8 @@
 """Encode / decode binary protobuf frames for the control-panel ``/ws`` channel."""
 
+# Generated stubs attach message types dynamically; pylint cannot see them.
+# pylint: disable=no-member
+
 from __future__ import annotations
 
 import json

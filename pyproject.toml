@@ -136,3 +136,7 @@ source = ["lovensepy"]
 omit = [
     "*/tests/*",
 ]
+
+# Generated protobuf stubs (protoc output) — not hand-linted.
+[tool.pylint.main]
+ignore = ["ws_pb2.py"]
