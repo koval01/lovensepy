@@ -160,9 +160,7 @@ async def list_access_approvals(runtime: Runtime, _: HostOnly) -> dict[str, Any]
     "/system/access-approvals/{request_id}/allow",
     summary="Allow a waiting tunnel visitor (no access code needed)",
 )
-async def allow_access_approval(
-    request_id: str, runtime: Runtime, _: HostOnly
-) -> dict[str, Any]:
+async def allow_access_approval(request_id: str, runtime: Runtime, _: HostOnly) -> dict[str, Any]:
     result = runtime.gate.approve(request_id)
     if result is None:
         raise HTTPException(status_code=404, detail="No pending approval with that id.")
@@ -173,9 +171,7 @@ async def allow_access_approval(
     "/system/access-approvals/{request_id}/deny",
     summary="Deny a waiting tunnel visitor",
 )
-async def deny_access_approval(
-    request_id: str, runtime: Runtime, _: HostOnly
-) -> dict[str, Any]:
+async def deny_access_approval(request_id: str, runtime: Runtime, _: HostOnly) -> dict[str, Any]:
     result = runtime.gate.deny(request_id)
     if result is None:
         raise HTTPException(status_code=404, detail="No pending approval with that id.")
@@ -202,7 +198,7 @@ async def set_tunnel(
                 status_code=400,
                 detail=(
                     "Cannot start a tunnel: listen port is unknown. "
-                    "Set LOVENSE_PORT or pass {\"port\": …}."
+                    'Set LOVENSE_PORT or pass {"port": …}.'
                 ),
             )
         runtime.set_listen_port(port)
@@ -212,9 +208,7 @@ async def set_tunnel(
         except FileNotFoundError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            raise HTTPException(
-                status_code=502, detail=f"{type(exc).__name__}: {exc}"
-            ) from exc
+            raise HTTPException(status_code=502, detail=f"{type(exc).__name__}: {exc}") from exc
         return {"status": "ok", "tunnel": status}
 
     runtime.cfg = runtime.cfg.model_copy(update={"tunnel_enabled": False})

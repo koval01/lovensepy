@@ -64,17 +64,23 @@ def test_localhost_can_read_config_and_tunnel(lan_backend: MagicMock) -> None:
 def test_remote_cannot_access_admin_or_setup(lan_backend: MagicMock) -> None:
     with _client() as client:
         assert client.get("/config", headers=_REMOTE_HEADERS).status_code == 403
-        assert client.post(
-            "/config/transports",
-            headers=_REMOTE_HEADERS,
-            json={"lan": False},
-        ).status_code == 403
+        assert (
+            client.post(
+                "/config/transports",
+                headers=_REMOTE_HEADERS,
+                json={"lan": False},
+            ).status_code
+            == 403
+        )
         assert client.get("/system/tunnel", headers=_REMOTE_HEADERS).status_code == 403
-        assert client.post(
-            "/system/tunnel",
-            headers=_REMOTE_HEADERS,
-            json={"enabled": True},
-        ).status_code == 403
+        assert (
+            client.post(
+                "/system/tunnel",
+                headers=_REMOTE_HEADERS,
+                json={"enabled": True},
+            ).status_code
+            == 403
+        )
         assert client.get("/system/network", headers=_REMOTE_HEADERS).status_code == 403
         assert client.post("/ble/scan", headers=_REMOTE_HEADERS).status_code == 403
         assert client.get("/docs", headers=_REMOTE_HEADERS).status_code == 403

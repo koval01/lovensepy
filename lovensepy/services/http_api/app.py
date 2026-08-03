@@ -136,9 +136,7 @@ def _install_host_only_docs(fastapi_app: FastAPI) -> None:
                 return JSONResponse(
                     status_code=403,
                     content={
-                        "detail": (
-                            "API documentation is only available from the local network."
-                        )
+                        "detail": ("API documentation is only available from the local network.")
                     },
                 )
         return await call_next(request)

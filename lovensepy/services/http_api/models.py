@@ -234,8 +234,7 @@ class SetTunnelBody(BaseModel):
         ge=1,
         le=65535,
         description=(
-            "Override the local listen port cloudflared should dial "
-            "(defaults to LOVENSE_PORT)."
+            "Override the local listen port cloudflared should dial (defaults to LOVENSE_PORT)."
         ),
     )
 

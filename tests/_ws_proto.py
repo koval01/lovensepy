@@ -64,6 +64,4 @@ def send_echo(
     t1: float | None = None,
     reply: bool = False,
 ) -> None:
-    socket.send_bytes(
-        ws_codec.client_echo(echo_id=echo_id, t0=t0, to_id=to_id, t1=t1, reply=reply)
-    )
+    socket.send_bytes(ws_codec.client_echo(echo_id=echo_id, t0=t0, to_id=to_id, t1=t1, reply=reply))

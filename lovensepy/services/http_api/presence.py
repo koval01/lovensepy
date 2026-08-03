@@ -286,14 +286,10 @@ class PresenceHub:
                         "tab": row.tab,
                         "activity": row.activity,
                         "activity_age_sec": (
-                            None
-                            if row.activity_at is None
-                            else round(now - row.activity_at, 1)
+                            None if row.activity_at is None else round(now - row.activity_at, 1)
                         ),
                         "rtt_ms": None if row.rtt_ms is None else round(row.rtt_ms, 1),
-                        "rtt_age_sec": (
-                            None if row.rtt_at is None else round(now - row.rtt_at, 1)
-                        ),
+                        "rtt_age_sec": (None if row.rtt_at is None else round(now - row.rtt_at, 1)),
                     }
                 )
             remotes.sort(key=lambda item: (item.get("idle_for_sec") or 0, item["client_id"]))

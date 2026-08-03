@@ -124,12 +124,7 @@ def is_external_request(scope: Scope, headers: Headers | None = None) -> bool:
         return True
     if host and _is_ip_literal(host) and not _is_private_ip(host):
         return True
-    if (
-        host
-        and "." in host
-        and not host.endswith(".local")
-        and not _is_ip_literal(host)
-    ):
+    if host and "." in host and not host.endswith(".local") and not _is_ip_literal(host):
         # Public DNS name (duckdns, ddns, …) — not a LAN share.
         return True
 
@@ -481,8 +476,10 @@ class AccessGate:
             if row.status == "pending" and row.expires_mono <= now:
                 row.status = "expired"
             # Drop finished rows a minute after decision / expiry.
-            keep_until = row.expires_mono if row.status == "pending" else (
-                (row.decided_mono or row.expires_mono) + 60.0
+            keep_until = (
+                row.expires_mono
+                if row.status == "pending"
+                else ((row.decided_mono or row.expires_mono) + 60.0)
             )
             if row.status != "pending" and keep_until <= now:
                 dead.append(key)

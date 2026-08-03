@@ -187,9 +187,7 @@ async def build_state(
     state["presence"] = runtime.presence.snapshot_for(viewer)
     state["access"] = {
         "role": role,
-        "capabilities": (
-            ["control", "admin", "setup"] if role == "host" else ["control"]
-        ),
+        "capabilities": (["control", "admin", "setup"] if role == "host" else ["control"]),
     }
     if role == "remote":
         return redact_state_for_remote(state)
@@ -209,7 +207,11 @@ def redact_state_for_remote(state: dict[str, Any]) -> dict[str, Any]:
         "webui_enabled": True,
         "events_interval_sec": (state.get("config") or {}).get("events_interval_sec"),
         "external_gate": True,
-        "lan": {"ip": None, "port": None, "enabled": bool((state.get("transports") or {}).get("lan"))},
+        "lan": {
+            "ip": None,
+            "port": None,
+            "enabled": bool((state.get("transports") or {}).get("lan")),
+        },
         "ble": {
             "enabled": bool((state.get("transports") or {}).get("ble")),
             "scan_timeout_sec": None,

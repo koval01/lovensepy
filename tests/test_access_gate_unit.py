@@ -37,9 +37,7 @@ def test_tunnel_and_public_hosts_are_external() -> None:
     assert is_external_request(_scope(host="toys.example.com")) is True
     assert is_external_request(_scope(host="8.8.8.8")) is True
     assert (
-        is_external_request(
-            _scope(host="127.0.0.1:8123", extra={"cf-connecting-ip": "1.1.1.1"})
-        )
+        is_external_request(_scope(host="127.0.0.1:8123", extra={"cf-connecting-ip": "1.1.1.1"}))
         is True
     )
 
@@ -153,7 +151,11 @@ def test_gate_can_be_disabled(lan_backend: MagicMock) -> None:
 
 def test_host_can_allow_waiting_tunnel_visitor(lan_backend: MagicMock) -> None:
     app = create_app(ServiceConfig(mode="lan", lan_ip="127.0.0.1", external_gate=True))
-    remote = {"Host": "demo.trycloudflare.com", "Accept": "application/json", "User-Agent": "iPhone"}
+    remote = {
+        "Host": "demo.trycloudflare.com",
+        "Accept": "application/json",
+        "User-Agent": "iPhone",
+    }
 
     with TestClient(app) as client:
         asked = client.post("/auth/request", headers=remote, json={})
