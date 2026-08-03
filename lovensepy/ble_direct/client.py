@@ -884,11 +884,10 @@ class BleDirectClient(LovenseAsyncControlClient):
         """Normalize dual-motor Function dicts to explicit ``Vibrate1`` + ``Vibrate2`` keys.
 
         If the caller passes **both** channels, values are kept. If only one channel is
-        present, the peer is coerced to **0** (not the last UART level) so
-        :func:`~lovensepy.ble_direct.standard_compat.ble_actions_to_uart_strings` can emit
-        a **single** motor line and channel-switch priming stays meaningful. Passing only
-        ``Vibrate2`` previously duplicated the last ``Vibrate1`` level and produced two
-        active channels, which felt “one step behind” on hardware probes.
+        present, the peer is filled from the last UART levels so a single-motor slider
+        tick does not briefly force the sibling to ``0`` (which felt like a full stop on
+        Edge-class toys). When the sibling is still ``0``, UART emission stays a single
+        line and channel-switch priming can still apply.
         """
         hint = self._motor_toy_type_hint()
         feats = ble_uart_features_for_toy_type(hint)

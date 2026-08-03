@@ -313,11 +313,14 @@ def test_dual_vibrate_inserts_inter_command_delay_between_writes():
     assert payloads == [b"Vibrate1:5;", b"Vibrate2:5;"]
 
 
-def test_coerce_dual_vibrate_zeros_peer_when_only_one_channel_given():
+def test_coerce_dual_vibrate_keeps_peer_at_last_level_when_only_one_channel_given():
     from lovensepy.ble_direct.client import BleDirectClient
 
     c = BleDirectClient("aa:bb", toy_type="edge")
     c._dual_vibrate_levels = (6, 0)
+    assert c._coerce_dual_vibrate_actions({"Vibrate2": 4}) == {"Vibrate1": 6, "Vibrate2": 4}
+    c._dual_vibrate_levels = (0, 0)
+    # Peer still 0 → UART stays a single-channel write (no sibling line).
     assert c._coerce_dual_vibrate_actions({"Vibrate2": 4}) == {"Vibrate1": 0, "Vibrate2": 4}
 
 
@@ -342,8 +345,8 @@ def test_dual_motor_no_peer_prime_on_first_single_channel_command():
     assert payloads[0] == b"Vibrate1:6;"
 
 
-def test_dual_motor_primes_peer_only_when_switching_channels():
-    """Peer :0; prime runs when the active motor changes, not on every single-channel write."""
+def test_dual_motor_keeps_peer_level_when_switching_channels():
+    """Single-channel writes keep the sibling at its last UART level (no forced :0;)."""
     client_cls, instance = _mock_ble_stack()
 
     async def _run() -> None:
@@ -362,15 +365,16 @@ def test_dual_motor_primes_peer_only_when_switching_channels():
 
     asyncio.run(_run())
     payloads = [c.args[1] for c in instance.write_gatt_char.await_args_list]
-    assert payloads[:4] == [
+    assert payloads == [
         b"Vibrate1:6;",
-        b"Vibrate1:0;",
+        b"Vibrate1:6;",
         b"Vibrate2:5;",
+        b"Vibrate1:6;",
         b"Vibrate2:4;",
     ]
 
 
-def test_dual_motor_primes_v2_zero_when_switching_to_v1_after_v2():
+def test_dual_motor_keeps_v2_when_switching_to_v1_after_v2():
     client_cls, instance = _mock_ble_stack()
 
     async def _run() -> None:
@@ -388,7 +392,7 @@ def test_dual_motor_primes_v2_zero_when_switching_to_v1_after_v2():
 
     asyncio.run(_run())
     payloads = [c.args[1] for c in instance.write_gatt_char.await_args_list]
-    assert payloads[:3] == [b"Vibrate2:6;", b"Vibrate2:0;", b"Vibrate1:5;"]
+    assert payloads == [b"Vibrate2:6;", b"Vibrate1:5;", b"Vibrate2:6;"]
 
 
 def test_dual_motor_single_channel_priming_can_be_disabled():
