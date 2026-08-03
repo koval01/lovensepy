@@ -39,7 +39,7 @@ Shared surface (where the backend supports it): `actions`, `presets`, `error_cod
 | Events API | `ToyEventsClient` | access (appName) | Port 20011. Lovense Remote only |
 | Home Assistant | `HAMqttBridge` | MQTT broker + Game Mode LAN IP, **or** MQTT + BLE (`transport="ble"`) | MQTT Discovery; commands → `AsyncLANClient` or `BleDirectHub`; Toy Events only in LAN mode |
 | Direct BLE | `BleDirectHubSync` / `BleDirectHub` / `BleDirectClient` | BLE address (peripheral) | No Lovense Remote on the path; **best-effort** UART; often **exclusive** with the app’s BLE link |
-| Example REST (panels) | `lovensepy.services.fastapi` (`[service]` extra) | `LOVENSE_SERVICE_MODE=lan` + Game Mode IP, or `=ble` + scan/connect | FastAPI + OpenAPI; asyncio scheduler; LAN or BLE backend |
+| HTTP service + web panel | `lovensepy.services.http_api` (`[service]` extra) | `LOVENSE_SERVICE_MODE=lan` + Game Mode IP, `=ble`, `=socket`, or `=hybrid`; the panel can also configure it at runtime | [Control panel](web-ui.md) at `/`, OpenAPI at `/docs`, `WS /ws`; asyncio scheduler; LAN, BLE and Socket backends |
 
 ## How traffic flows
 

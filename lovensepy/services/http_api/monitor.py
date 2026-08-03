@@ -32,9 +32,10 @@ async def _ble_advertisement_monitor_loop(
     *,
     cfg: ServiceConfig,
     stop: asyncio.Event,
-    state: Any,
+    advertisements: dict[str, dict[str, Any]],
     on_sync: Callable[[LovenseBleAdvertisement], None] | None,
     on_async: Callable[[LovenseBleAdvertisement], Awaitable[None]] | None,
+    on_round: Callable[[], None] | None = None,
 ) -> None:
     prefix = cfg.ble_scan_prefix_or_none()
     while not stop.is_set():
@@ -46,7 +47,12 @@ async def _ble_advertisement_monitor_loop(
         except Exception:
             _logger.debug("BLE advertisement scan failed", exc_info=True)
             rows = []
-        merge_ble_advertisement_rows(state.last_ble_advertisements, rows)
+        merge_ble_advertisement_rows(advertisements, rows)
+        if on_round is not None:
+            try:
+                on_round()
+            except Exception:
+                _logger.debug("BLE monitor round callback failed", exc_info=True)
         for row in rows:
             if on_sync is not None:
                 try:
@@ -67,18 +73,21 @@ async def _ble_advertisement_monitor_loop(
 def start_ble_advertisement_monitor(
     *,
     cfg: ServiceConfig,
-    state: Any,
-    on_sync: Callable[[LovenseBleAdvertisement], None] | None,
-    on_async: Callable[[LovenseBleAdvertisement], Awaitable[None]] | None,
+    advertisements: dict[str, dict[str, Any]],
+    on_sync: Callable[[LovenseBleAdvertisement], None] | None = None,
+    on_async: Callable[[LovenseBleAdvertisement], Awaitable[None]] | None = None,
+    on_round: Callable[[], None] | None = None,
 ) -> tuple[asyncio.Event, asyncio.Task[None]]:
+    """Start the background scan loop; returns its stop event and task."""
     stop = asyncio.Event()
     task = asyncio.create_task(
         _ble_advertisement_monitor_loop(
             cfg=cfg,
             stop=stop,
-            state=state,
+            advertisements=advertisements,
             on_sync=on_sync,
             on_async=on_async,
+            on_round=on_round,
         ),
         name="lovensepy:ble_advert_monitor",
     )

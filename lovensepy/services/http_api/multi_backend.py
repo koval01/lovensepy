@@ -44,9 +44,9 @@ class CompositeLovenseControlBackend(LovenseControlBackend):
         toy_to_backends: dict[str, list[str]] = {}
         toy_dict_by_id: dict[str, dict[str, Any]] = {}
 
-        # Query toys from each backend (in parallel).
+        # Routing only needs ids, so skip per-toy battery queries (UART round-trips on BLE).
         results = await asyncio.gather(
-            *(b.get_toys() for b in self._backends.values()),
+            *(b.get_toys(query_battery=False) for b in self._backends.values()),
             return_exceptions=True,
         )
 
@@ -344,7 +344,7 @@ class CompositeLovenseControlBackend(LovenseControlBackend):
 
         responses = await asyncio.gather(
             *(
-                self._backends[name].preset_request(
+                self._backends[backend_name].preset_request(
                     name,
                     time=time,
                     toy_id=ids,
@@ -352,7 +352,7 @@ class CompositeLovenseControlBackend(LovenseControlBackend):
                     open_ended=open_ended,
                     wait_for_completion=wait_for_completion,
                 )
-                for name, ids in used.items()
+                for backend_name, ids in used.items()
             ),
             return_exceptions=True,
         )

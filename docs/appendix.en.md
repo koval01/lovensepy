@@ -141,11 +141,11 @@ For local HTTPS (port 30011), lovensepy verifies the Lovense certificate fingerp
 | `examples/ble_direct_scan_and_two.py` | BLE CLI: scan (default **LVS-** names), interactive multiselect (`pick`), or `--no-tui` + numbers; pulse test; optional **`--wave`** sine sweeps per toy / dual motors / all together |
 | `examples/ble_direct_preset_multi.py` | Direct BLE: send the same **preset** (`pulse` / `wave` / …) to **any number** of toy addresses in parallel (`asyncio.gather`) — pass one address or many; for a **single hub object** use `BleDirectHub` (see [Direct BLE](direct-ble.md)) |
 | `examples/ble_direct_send_uart_once.py` | Direct BLE: connect to one toy, send a raw UART line once, and disconnect (diagnostics/manual commands) |
-| `lovensepy.services.fastapi` / `examples/fastapi_lan_api.py` (shim) | FastAPI REST + OpenAPI; LAN (Game Mode) or BLE (`LOVENSE_SERVICE_MODE`); per-motor tasks, presets/patterns, `/tasks`, batch stops — **[tutorial](tutorials/fastapi-lan-rest.md#fastapi-lan-rest-tutorial)** |
+| `lovensepy.services.http_api` / `examples/fastapi_lan_api.py` (shim) | Web control panel at `/`, REST + OpenAPI at `/docs`, `WS /ws`; LAN (Game Mode), BLE, Socket or `hybrid` (`LOVENSE_SERVICE_MODE`); per-motor tasks, presets/patterns, `/tasks`, batch stops — **[panel](web-ui.md)**, **[tutorial](tutorials/fastapi-lan-rest.md#fastapi-lan-rest-tutorial)** |
 
 Run with env vars, e.g. `LOVENSE_LAN_IP=192.168.1.100 python examples/lan_game_mode.py`
 
-**FastAPI:** `pip install 'lovensepy[service]'` then `LOVENSE_LAN_IP=192.168.1.100 uvicorn lovensepy.services.fastapi.app:app --host 0.0.0.0 --port 8000` (BLE: `LOVENSE_SERVICE_MODE=ble` and `lovensepy[ble]`) — [tutorial](tutorials/fastapi-lan-rest.md#fastapi-lan-rest-tutorial).
+**HTTP service:** `pip install 'lovensepy[service]'` then `LOVENSE_LAN_IP=192.168.1.100 uvicorn lovensepy.services.http_api.app:app --host 0.0.0.0 --port 8000` (BLE: `LOVENSE_SERVICE_MODE=ble` and `lovensepy[ble]`); open `/` for the panel, `/docs` for OpenAPI — [panel](web-ui.md), [tutorial](tutorials/fastapi-lan-rest.md#fastapi-lan-rest-tutorial).
 
 ---
 

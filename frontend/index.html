@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover + safe-area padding keeps the sticky bars clear of the iOS home bar.
+         maximum-scale is intentional: this is a control surface where an accidental
+         double-tap zoom mid-session is worse than the lost pinch gesture. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="LovensePy" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      name="description"
+      content="Local control panel for Lovense toys served by the LovensePy HTTP service."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23000'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23fff'/%3E%3C/svg%3E"
+    />
+    <title>LovensePy · Control panel</title>
+    <!-- Apply stored / system theme before first paint to avoid a light↔dark flash. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("lovensepy.theme");
+          var theme =
+            stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+          var dark =
+            theme === "dark" ||
+            (theme !== "light" &&
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) {
+          var prefersDark =
+            window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          document.documentElement.classList.toggle("dark", prefersDark);
+          document.documentElement.style.colorScheme = prefersDark ? "dark" : "light";
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      This control panel needs JavaScript. The REST API is available at
+      <a href="/docs">/docs</a>.
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

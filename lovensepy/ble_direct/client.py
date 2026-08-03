@@ -900,9 +900,13 @@ class BleDirectClient(LovenseAsyncControlClient):
             return {"Vibrate1": int(v1), "Vibrate2": int(v2)}
         if v1 is None and v2 is None:
             return clamped
+        # Keep the peer at its last UART level when only one channel is present.
+        # Forcing the sibling to 0 on every slider tick felt like a physical switch
+        # opening (brief full stop) before the new level closed again.
+        last_v1, last_v2 = self._dual_vibrate_levels
         if v1 is not None:
-            return {"Vibrate1": int(v1), "Vibrate2": 0}
-        return {"Vibrate1": 0, "Vibrate2": int(v2)}
+            return {"Vibrate1": int(v1), "Vibrate2": int(last_v2)}
+        return {"Vibrate1": int(last_v1), "Vibrate2": int(v2)}
 
     async def query_uart_line(
         self,

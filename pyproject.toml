@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lovensepy"
-version = "1.1.4"
+version = "1.1.5"
 description = "Python Lovense API client"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -36,6 +36,7 @@ ble = [
 service = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.42.0",
+    "protobuf>=6.31.1,<7",
 ]
 dev = [
     "pytest>=9.0.0",
@@ -52,6 +53,8 @@ dev = [
     "semgrep>=1.100.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.42.0",
+    "protobuf>=6.31.1,<7",
+    "grpcio-tools>=1.76.0",
 ]
 docs = [
     "mkdocs>=1.6.1",
@@ -62,6 +65,7 @@ docs = [
 
 [project.scripts]
 lovensepy-mqtt = "lovensepy.services.mqtt_bridge:main"
+lovensepy-service = "lovensepy.services.launcher:main"
 
 [project.urls]
 Homepage = "https://github.com/koval01/lovensepy"
@@ -89,12 +93,28 @@ known-first-party = ["lovensepy"]
 "lovensepy/ble_direct/standard_compat.py" = ["E501"]
 # ensure_pypi_fastapi() must run before any `from fastapi...` (Nuitka / import order).
 "lovensepy/services/http_api/app.py" = ["E402"]
+# Embedded authorization HTML page.
+"lovensepy/services/http_api/access_gate.py" = ["E501"]
+# Generated protobuf stubs.
+"lovensepy/services/http_api/ws_pb2.py" = ["E501", "I001", "N816"]
 
 [tool.setuptools.package-data]
 lovensepy = ["py.typed"]
 "lovensepy.ble_direct" = [
     "toy_config_ble_marketing.json",
     "toy_config_ble_marketing_firmware.json",
+]
+# Built web control panel (frontend/ → `npm run build`). Absent in a plain source
+# checkout; the service then serves a placeholder page instead of the panel.
+"lovensepy.services.http_api" = [
+    "webui_dist/index.html",
+    "webui_dist/*.json",
+    "webui_dist/*.svg",
+    "webui_dist/*.png",
+    "webui_dist/*.ico",
+    "webui_dist/*.txt",
+    "webui_dist/assets/*",
+    "proto/*.proto",
 ]
 
 [tool.setuptools.packages.find]

@@ -4,6 +4,8 @@ include pyproject.toml
 include requirements.txt
 recursive-include lovensepy *.py
 include lovensepy/py.typed
+recursive-include lovensepy/services/http_api/proto *.proto
+recursive-include lovensepy/services/http_api/webui_dist *
 
 # Exclude files from .gitignore
 global-exclude *.pyc

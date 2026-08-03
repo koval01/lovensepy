@@ -18,7 +18,7 @@ Before using LovensePy, ensure you have:
 - **Toy Events API**: Real-time events (toy-list, button-down, function-strength-changed, etc.)
 - **Home Assistant MQTT bridge** (optional): MQTT Discovery + control via LAN or BLE — service `lovensepy.services.mqtt_bridge` / CLI `lovensepy-mqtt` (`pip install 'lovensepy[mqtt]'`, add `[ble]` for BLE)
 - **Direct BLE** (optional): `BleDirectHubSync` / `BleDirectHub` / `BleDirectClient` — see [Direct BLE](direct-ble.md)
-- **FastAPI service** (`lovensepy.services.fastapi`, optional extra `[service]`): HTTP REST + OpenAPI `/docs` for Game Mode or BLE — see [FastAPI tutorial](tutorials/fastapi-lan-rest.md). Example shim: `examples/fastapi_lan_api.py`.
+- **HTTP service + web control panel** (`lovensepy.services.http_api`, optional extra `[service]`): browser panel at `/`, HTTP REST and OpenAPI at `/docs`, live state over `WS /ws`, for Game Mode, BLE or both — see [Web control panel](web-ui.md) and the [FastAPI tutorial](tutorials/fastapi-lan-rest.md). Example shim: `examples/fastapi_lan_api.py`.
 
 ## Install
 

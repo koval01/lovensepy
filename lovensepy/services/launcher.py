@@ -1,11 +1,12 @@
 """
 Executable entrypoint for the bundled LovensePy service.
 
-Intended usage (development):
-    python -m lovensepy.services.launcher
+Serves the web control panel at ``/`` and opens it in a browser.
 
-With Windows exe build (PyInstaller):
-    lovensepy-service.exe
+Intended usage:
+    lovensepy-service              # console script (pip install 'lovensepy[service]')
+    python -m lovensepy.services.launcher
+    lovensepy-service.exe          # Windows exe build
 
 Configuration:
 - FastAPI service mode + transports come from
@@ -13,8 +14,15 @@ Configuration:
   (e.g. `LOVENSE_SERVICE_MODE`, `LOVENSE_LAN_IP`, `LOVENSE_DEV_TOKEN`, ...).
 - Uvicorn runtime is controlled by:
   - `LOVENSE_HOST` (default `0.0.0.0`)
-  - `LOVENSE_PORT` (default `8000`)
+  - `LOVENSE_PORT` (default: pick a free port in 10000–50000)
   - `LOVENSE_LOG_LEVEL` (default `info`)
+- Public share link (optional Cloudflare quick tunnel):
+  - `LOVENSE_TUNNEL=1` starts ``cloudflared tunnel --url http://127.0.0.1:<port>``
+    with the service and prints the ``https://*.trycloudflare.com`` URL. Requires
+    ``cloudflared`` on ``PATH`` (or ``LOVENSE_CLOUDFLARED_BIN``). Can also be
+    started/stopped from the control panel Settings tab.
+  - Outside the LAN, visitors must enter a 6-digit code printed in this console
+    (disable with ``LOVENSE_GATE=0``).
 - macOS `.app` (no terminal): when stdin is not a TTY, a minimal Cocoa menu is used so
   you can quit with ⌘Q or Dock → Quit (closing the browser tab does not stop the server).
   Set `LOVENSE_MACOS_GUI_MENU=0` to force the plain blocking server loop instead.
@@ -214,12 +222,6 @@ def main() -> None:
     # in a relaxed way (LAN can be configured later via handler).
     os.environ.setdefault("LOVENSE_SERVICE_MODE", "hybrid")
 
-    from lovensepy.services.http_api._ensure_pypi_fastapi import ensure_pypi_fastapi
-
-    ensure_pypi_fastapi()
-
-    from lovensepy.services.http_api.app import app as fastapi_app
-
     host = (
         os.environ.get("LOVENSE_HOST", "0.0.0.0").strip() or "0.0.0.0"  # nosec B104
     )
@@ -228,6 +230,15 @@ def main() -> None:
         port = int(forced_port_raw)
     else:
         port = _choose_free_port(host="127.0.0.1")
+        # Publish the chosen port before importing the app so ServiceConfig / the
+        # Cloudflare tunnel supervisor know which loopback URL to target.
+        os.environ["LOVENSE_PORT"] = str(port)
+
+    from lovensepy.services.http_api._ensure_pypi_fastapi import ensure_pypi_fastapi
+
+    ensure_pypi_fastapi()
+
+    from lovensepy.services.http_api.app import app as fastapi_app
 
     log_level = os.environ.get("LOVENSE_LOG_LEVEL", "info").strip() or "info"
 
@@ -235,8 +246,11 @@ def main() -> None:
     # In the "no env provided" case create_app(ServiceConfig.from_env()) would fail and crash.
     # The module-level `app` already falls back to a config-error FastAPI app.
     app = fastapi_app
+    runtime = getattr(getattr(app, "state", None), "runtime", None)
+    if runtime is not None and hasattr(runtime, "set_listen_port"):
+        runtime.set_listen_port(port)
 
-    # Open browser to the docs root immediately after the server starts.
+    # Open the control panel as soon as the server starts.
     open_browser = os.environ.get("LOVENSE_OPEN_BROWSER", "1").strip().lower() not in (
         "0",
         "false",
@@ -253,6 +267,17 @@ def main() -> None:
         threading.Timer(1.0, _open).start()
 
     print(f"Open http://127.0.0.1:{port}/ in your browser.")
+    if (os.environ.get("LOVENSE_TUNNEL") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        print(
+            "Cloudflare tunnel requested (LOVENSE_TUNNEL=1). "
+            "The public https://*.trycloudflare.com URL appears in the panel "
+            "(phone icon) once cloudflared is ready."
+        )
     print("LovensePy service is starting...")
     if sys.stdin.isatty():
         print("Press Ctrl+C in this terminal to stop the server.")

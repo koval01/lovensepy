@@ -31,7 +31,18 @@ def _collect_ble_branding_data() -> list[tuple[str, str]]:
     return out
 
 
-datas = _collect_ble_branding_data()
+def _collect_webui_data() -> list[tuple[str, str]]:
+    # Built React control panel served at "/". Built by `cd frontend && npm run build`;
+    # when it is absent the service falls back to a placeholder page.
+    root = os.path.join("lovensepy", "services", "http_api", "webui_dist")
+    out: list[tuple[str, str]] = []
+    for path in glob.glob(os.path.join(root, "**", "*"), recursive=True):
+        if os.path.isfile(path):
+            out.append((path, os.path.dirname(path)))
+    return out
+
+
+datas = _collect_ble_branding_data() + _collect_webui_data()
 if os.path.exists("pyproject.toml"):
     # Used by lovensepy._http_identity.package_version() fallback in PyInstaller bundles
     # where importlib.metadata may not find dist-info.

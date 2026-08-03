@@ -26,3 +26,8 @@ nuitka-crash-report.xml
 
 # MkDocs
 /site/
+
+# Web control panel: sources live in frontend/, build output is generated
+# (`cd frontend && npm run build`) and shipped by CI, not committed.
+/frontend/node_modules/
+/lovensepy/services/http_api/webui_dist/

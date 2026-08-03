@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package lovensepy.ws;
+
+// Binary WebSocket frames for the control-panel live channel (`/ws`).
+// Control messages are typed protobuf; the large state snapshot is UTF-8 JSON
+// with the same shape as REST ``GET /state`` (avoids Struct number/null quirks).
+
+message Hello {
+  string version = 1;
+  double interval_sec = 2;
+  double heartbeat_sec = 3;
+  string client_id = 4;
+  string role = 5;
+}
+
+message Heartbeat {
+  int64 rev = 1;
+}
+
+message Error {
+  string detail = 1;
+}
+
+message State {
+  // UTF-8 JSON object, identical to the REST ``/state`` body.
+  bytes json = 1;
+}
+
+message Echo {
+  string id = 1;
+  double t0 = 2;
+  optional double t1 = 3;
+  string from_id = 4;
+  string to_id = 5;
+  bool reply = 6;
+}
+
+message Pong {}
+
+message ServerMessage {
+  oneof body {
+    Hello hello = 1;
+    State state = 2;
+    Heartbeat heartbeat = 3;
+    Error error = 4;
+    Echo echo = 5;
+    Pong pong = 6;
+  }
+}
+
+message Refresh {}
+message Ping {}
+
+message Presence {
+  string tab = 1;
+  string activity = 2;
+}
+
+message Rtt {
+  string peer_id = 1;
+  double rtt_ms = 2;
+}
+
+message ClientMessage {
+  oneof body {
+    Refresh refresh = 1;
+    Ping ping = 2;
+    Presence presence = 3;
+    Rtt rtt = 4;
+    Echo echo = 5;
+  }
+}

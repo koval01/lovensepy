@@ -16,6 +16,31 @@ permissions:
   contents: read
 
 jobs:
+  webui:
+    name: Web control panel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck and build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Check the service can serve the built panel
+        run: |
+          test -f lovensepy/services/http_api/webui_dist/index.html
+          ls lovensepy/services/http_api/webui_dist/assets
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -53,6 +78,10 @@ jobs:
             tests/test_transport_ws_unit.py \
             tests/test_socket_api_cleanup_unit.py \
             tests/test_service_fastapi.py \
+            tests/test_service_state_and_webui.py \
+            tests/test_ble_supervisor_unit.py \
+            tests/test_tunnel_unit.py \
+            tests/test_access_gate_unit.py \
             tests/test_ble_scan_advertisements.py \
             -v --cov=lovensepy --cov-report=term-missing
 

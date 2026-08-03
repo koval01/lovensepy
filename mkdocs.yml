@@ -54,6 +54,7 @@ plugins:
             Changelog: История изменений
             Installation: Установка
             Connection methods: Способы подключения
+            Web control panel: Веб-панель управления
             Direct BLE: Прямой BLE
             Tutorials: Руководства
             LAN & BLE hub: Хаб LAN и BLE
@@ -90,6 +91,7 @@ nav:
   - Changelog: changelog.md
   - Installation: installation.md
   - Connection methods: connection-methods.md
+  - Web control panel: web-ui.md
   - Direct BLE: direct-ble.md
   - Tutorials:
       - LAN & BLE hub: tutorials/lan.md

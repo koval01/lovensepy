@@ -28,6 +28,14 @@ def main() -> None:
         dst = rel  # keep same relative path inside the bundle
         data_args += [f"--include-data-file={rel}={dst}"]
 
+    # Built React control panel (frontend/ -> npm run build). Optional: without it the
+    # service still starts and serves a placeholder page plus the REST API.
+    webui = root / "lovensepy" / "services" / "http_api" / "webui_dist"
+    if (webui / "index.html").is_file():
+        data_args += ["--include-data-dir=lovensepy/services/http_api/webui_dist=lovensepy/services/http_api/webui_dist"]
+    else:
+        print("warning: web UI assets not found; building without the control panel", flush=True)
+
     is_macos = sys.platform == "darwin"
 
     # uvloop is not shipped / not supported on Windows; uvicorn[standard] skips it there too.

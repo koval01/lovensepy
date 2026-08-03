@@ -53,7 +53,9 @@ class ControlScheduler:
             self._meta.clear()
 
     async def _fetch_toy_dict(self, toy_id: str) -> dict[str, Any] | None:
-        response = await self._backend.get_toys()
+        # Never query UART battery on the command path — that alone can cost hundreds
+        # of milliseconds per slider tick and is already handled by the BLE supervisor.
+        response = await self._backend.get_toys(query_battery=False)
         if not response.data:
             return None
         for toy in response.data.toys:
@@ -333,15 +335,21 @@ class ControlScheduler:
                 actions[feat] = lvl
         actions = self._clamp_actions(actions)
 
+        # wait_for_completion=False: return as soon as the UART/HTTP write is queued.
+        # Slider updates must not block on BLE notify round-trips or post-command sleeps.
         if not actions:
             toy_dict = await self._fetch_toy_dict(toy_id)
             if toy_dict:
                 zeros = stop_actions(toy_dict)
-                await self._backend.function_request(zeros, time=0, toy_id=toy_id)
+                await self._backend.function_request(
+                    zeros, time=0, toy_id=toy_id, wait_for_completion=False
+                )
             else:
                 await self._backend.stop(toy_id)
         else:
-            await self._backend.function_request(actions, time=0, toy_id=toy_id)
+            await self._backend.function_request(
+                actions, time=0, toy_id=toy_id, wait_for_completion=False
+            )
 
     async def _run_slot(
         self,
@@ -351,29 +359,43 @@ class ControlScheduler:
         level: float,
         duration: float,
     ) -> None:
+        key = (toy_id, feature)
         lock = self._lock_for(toy_id)
+        me = asyncio.current_task()
         try:
             async with lock:
                 if self._closed:
                     return
                 async with self._state_lock:
-                    self._levels[(toy_id, feature)] = level
+                    # A newer continuous overwrite may already own this slot.
+                    if self._tasks.get(key) is not me:
+                        return
+                    self._levels[key] = level
                 await self._apply_snapshot(toy_id)
 
             if duration > 0:
                 await asyncio.sleep(duration)
             else:
+                # Indefinite hold: park until cancelled. Level changes must NOT cancel
+                # this task — they overwrite ``_levels`` and re-apply in place.
                 wait = asyncio.Event()
                 await wait.wait()
         except asyncio.CancelledError:
             raise
         finally:
             async with lock:
+                should_apply = False
                 async with self._state_lock:
-                    self._levels.pop((toy_id, feature), None)
-                    self._tasks.pop((toy_id, feature), None)
+                    # Only silence this motor if we still own the slot. Otherwise a
+                    # replacement hold already wrote the next level and a stop here
+                    # would open a gap (the "switch contacts" jerk on sliders).
+                    if self._tasks.get(key) is me:
+                        self._tasks.pop(key, None)
+                        self._levels.pop(key, None)
+                        should_apply = True
                     self._meta.pop(task_id, None)
-                await self._apply_snapshot(toy_id)
+                if should_apply:
+                    await self._apply_snapshot(toy_id)
 
     async def schedule_function(
         self,
@@ -422,30 +444,116 @@ class ControlScheduler:
 
         created: list[dict[str, Any]] = []
         for feature, level in expanded.items():
-            await self._cancel_slot(toy_id, feature)
-            task_id = str(uuid.uuid4())
-            task = asyncio.create_task(
-                self._run_slot(task_id, toy_id, feature, float(level), float(duration)),
-                name=f"lovense:{toy_id}:{feature}",
+            updated = await self._update_or_schedule_slot(
+                toy_id, feature, float(level), float(duration)
             )
-            now_mono = time.monotonic()
-            started_at = datetime.now(UTC).isoformat()
-            meta = {
-                "task_id": task_id,
+            created.append(updated)
+        return {"scheduled": created, "type": "OK"}
+
+    async def _update_or_schedule_slot(
+        self, toy_id: str, feature: str, level: float, duration: float
+    ) -> dict[str, Any]:
+        """Create a hold slot, or continuously overwrite an indefinite hold.
+
+        Slider drags must never cancel→stop→restart. That sequence opens a gap where
+        motors go to zero between the old and new Function write. For ``duration == 0``
+        we keep one parked task and only rewrite the level + re-apply the snapshot.
+        """
+        key = (toy_id, feature)
+        lock = self._lock_for(toy_id)
+
+        # Continuous hold (slider / level set until stopped).
+        if duration <= 0 and level > 0:
+            async with lock:
+                async with self._state_lock:
+                    existing = self._tasks.get(key)
+                    task_id: str | None = None
+                    if existing is not None and not existing.done():
+                        for tid, meta in self._meta.items():
+                            if (
+                                meta.get("kind") == "function"
+                                and meta.get("toy_id") == toy_id
+                                and meta.get("feature") == feature
+                                and meta.get("duration_sec", 0) <= 0
+                            ):
+                                task_id = tid
+                                break
+
+                    if existing is None or existing.done() or task_id is None:
+                        # First touch (or timed slot ended): park a keeper task. Do not
+                        # cancel anything first — there is nothing useful to tear down.
+                        task_id = str(uuid.uuid4())
+                        now_mono = time.monotonic()
+                        meta = {
+                            "task_id": task_id,
+                            "kind": "function",
+                            "toy_id": toy_id,
+                            "feature": feature,
+                            "level": level,
+                            "duration_sec": 0.0,
+                            "started_at": datetime.now(UTC).isoformat(),
+                            "started_monotonic_sec": now_mono,
+                            "ends_mono": None,
+                        }
+                        self._levels[key] = level
+                        self._meta[task_id] = meta
+                        task = asyncio.create_task(
+                            self._run_slot(task_id, toy_id, feature, level, 0.0),
+                            name=f"lovense:{toy_id}:{feature}",
+                        )
+                        self._tasks[key] = task
+                    else:
+                        self._levels[key] = level
+                        meta = self._meta.get(task_id)
+                        if meta is not None:
+                            meta["level"] = level
+                        else:
+                            meta = {"task_id": task_id, "level": level}
+
+                await self._apply_snapshot(toy_id)
+
+            async with self._state_lock:
+                return dict(self._meta.get(task_id) or {"task_id": task_id, "level": level})
+
+        # Timed hold, or explicit zero: replace the previous slot.
+        await self._cancel_slot(toy_id, feature)
+        if duration <= 0 and level <= 0:
+            async with lock:
+                async with self._state_lock:
+                    self._levels.pop(key, None)
+                await self._apply_snapshot(toy_id)
+            return {
+                "task_id": None,
                 "kind": "function",
                 "toy_id": toy_id,
                 "feature": feature,
-                "level": float(level),
-                "duration_sec": float(duration),
-                "started_at": started_at,
-                "started_monotonic_sec": now_mono,
-                "ends_mono": (now_mono + duration) if duration > 0 else None,
+                "level": 0.0,
+                "duration_sec": 0.0,
             }
-            async with self._state_lock:
-                self._tasks[(toy_id, feature)] = task
-                self._meta[task_id] = meta
-            created.append(meta)
-        return {"scheduled": created, "type": "OK"}
+
+        task_id = str(uuid.uuid4())
+        now_mono = time.monotonic()
+        started_at = datetime.now(UTC).isoformat()
+        meta = {
+            "task_id": task_id,
+            "kind": "function",
+            "toy_id": toy_id,
+            "feature": feature,
+            "level": level,
+            "duration_sec": duration,
+            "started_at": started_at,
+            "started_monotonic_sec": now_mono,
+            "ends_mono": (now_mono + duration) if duration > 0 else None,
+        }
+        async with self._state_lock:
+            self._levels[key] = level
+            self._meta[task_id] = meta
+            task = asyncio.create_task(
+                self._run_slot(task_id, toy_id, feature, level, duration),
+                name=f"lovense:{toy_id}:{feature}",
+            )
+            self._tasks[key] = task
+        return meta
 
     async def list_tasks(self) -> list[dict[str, Any]]:
         now = time.monotonic()

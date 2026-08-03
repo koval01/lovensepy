@@ -141,11 +141,11 @@ sequenceDiagram
 | `examples/ble_direct_scan_and_two.py` | BLE CLI: скан (имена по умолчанию **LVS-**), интерактивный мультивыбор (`pick`) или `--no-tui` + номера; тест pulse; опционально **`--wave`** — синус по игрушке / моторам / всем |
 | `examples/ble_direct_preset_multi.py` | Прямой BLE: один и тот же **пресет** (`pulse` / `wave` / …) на **любое число** адресов параллельно (`asyncio.gather`) — один адрес или много; для **одного хаба** используйте `BleDirectHub` (см. [Прямой BLE](direct-ble.md)) |
 | `examples/ble_direct_send_uart_once.py` | Прямой BLE: подключиться к одной игрушке, отправить одну «сырую» UART-команду и отключиться (диагностика/ручные команды) |
-| `lovensepy.services.fastapi` / `examples/fastapi_lan_api.py` (обёртка) | FastAPI REST + OpenAPI; LAN (Game Mode) или BLE (`LOVENSE_SERVICE_MODE`); задачи по моторам, пресеты/паттерны, `/tasks`, пакетные стопы — **[руководство](tutorials/fastapi-lan-rest.md#fastapi-lan-rest-tutorial)** |
+| `lovensepy.services.http_api` / `examples/fastapi_lan_api.py` (обёртка) | Веб-панель на `/`, REST + OpenAPI на `/docs`, `WS /ws`; LAN (Game Mode), BLE, Socket или `hybrid` (`LOVENSE_SERVICE_MODE`); задачи по моторам, пресеты/паттерны, `/tasks`, пакетные стопы — **[панель](web-ui.md)**, **[руководство](tutorials/fastapi-lan-rest.md#fastapi-lan-rest-tutorial)** |
 
 Запуск с переменными окружения, например `LOVENSE_LAN_IP=192.168.1.100 python examples/lan_game_mode.py`
 
-**FastAPI:** `pip install 'lovensepy[service]'` затем `LOVENSE_LAN_IP=192.168.1.100 uvicorn lovensepy.services.fastapi.app:app --host 0.0.0.0 --port 8000` (BLE: `LOVENSE_SERVICE_MODE=ble` и `lovensepy[ble]`) — [руководство](tutorials/fastapi-lan-rest.md#fastapi-lan-rest-tutorial).
+**HTTP-сервис:** `pip install 'lovensepy[service]'` затем `LOVENSE_LAN_IP=192.168.1.100 uvicorn lovensepy.services.http_api.app:app --host 0.0.0.0 --port 8000` (BLE: `LOVENSE_SERVICE_MODE=ble` и `lovensepy[ble]`); откройте `/` для панели, `/docs` для OpenAPI — [панель](web-ui.md), [руководство](tutorials/fastapi-lan-rest.md#fastapi-lan-rest-tutorial).
 
 ---
 

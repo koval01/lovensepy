@@ -190,7 +190,7 @@ def test_composite_backend_routes_by_toy_id():
 
 def test_fastapi_socket_endpoints(monkeypatch):
     # Avoid real websocket connection by swapping SocketControlBackend.
-    import lovensepy.services.http_api.app as http_app_module
+    import lovensepy.services.http_api.transports as transports_module
 
     class _FakeSocketBackend:
         def __init__(self, cfg: ServiceConfig) -> None:
@@ -216,7 +216,7 @@ def test_fastapi_socket_endpoints(monkeypatch):
         def request_qr(self) -> None:
             return
 
-    monkeypatch.setattr(http_app_module, "SocketControlBackend", _FakeSocketBackend)
+    monkeypatch.setattr(transports_module, "SocketControlBackend", _FakeSocketBackend)
 
     cfg = ServiceConfig(
         mode="socket",

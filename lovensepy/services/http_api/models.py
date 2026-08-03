@@ -187,6 +187,121 @@ class BleBrandingResolveBody(BaseModel):
     )
 
 
+class SetLanIpBody(BaseModel):
+    """Enable / re-point LAN (Game Mode) without restarting the service."""
+
+    lan_ip: str = Field(..., min_length=7, description="Host running the Lovense app.")
+    lan_port: int | None = Field(
+        default=None,
+        ge=1,
+        le=65535,
+        description="Game Mode port (20011 Remote, 34567 Connect). Keeps current value if omitted.",
+    )
+
+    @field_validator("lan_ip")
+    @classmethod
+    def strip_ip(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("lan_ip must not be empty")
+        return cleaned
+
+
+class SetSocketBody(BaseModel):
+    """Enable the Lovense Socket API (cloud pairing) at runtime."""
+
+    developer_token: str = Field(..., min_length=1, description="Lovense developer token.")
+    uid: str = Field(..., min_length=1, description="Lovense app user uid.")
+    platform: str = Field(
+        ..., min_length=1, description="Platform/website name from the dashboard."
+    )
+    uname: str | None = Field(default=None, description="Optional nickname for token issuance.")
+    use_local_commands: bool | None = Field(
+        default=None,
+        description="Route Pattern/Preset through local HTTPS when the app reports local info.",
+    )
+    auto_request_qr: bool | None = Field(
+        default=None, description="Request the pairing QR as soon as Socket.IO is ready."
+    )
+
+
+class SetTunnelBody(BaseModel):
+    """Start or stop the Cloudflare quick tunnel from the control panel."""
+
+    enabled: bool = Field(..., description="True to publish the panel on trycloudflare.com.")
+    port: int | None = Field(
+        default=None,
+        ge=1,
+        le=65535,
+        description=(
+            "Override the local listen port cloudflared should dial "
+            "(defaults to LOVENSE_PORT)."
+        ),
+    )
+
+
+class SetBleOptionsBody(BaseModel):
+    """Tune BLE behaviour from the control panel."""
+
+    auto_reconnect: bool | None = Field(
+        default=None, description="Keep registered toys connected in the background."
+    )
+    advertisement_monitor: bool | None = Field(
+        default=None, description="Keep scanning in the background to refresh RSSI / discovery."
+    )
+    scan_timeout_sec: float | None = Field(default=None, ge=0.5, le=120.0)
+    scan_name_prefix: str | None = Field(
+        default=None,
+        description="Advertised-name filter; empty string scans every BLE peripheral.",
+    )
+    preset_uart_keyword: str | None = Field(
+        default=None, description="UART keyword for built-in presets: 'Preset' or 'Pat'."
+    )
+    preset_emulate_pattern: bool | None = Field(
+        default=None, description="Emulate presets with pattern stepping (firmware workaround)."
+    )
+
+    @field_validator("preset_uart_keyword")
+    @classmethod
+    def check_keyword(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if cleaned.lower() not in ("preset", "pat"):
+            raise ValueError("preset_uart_keyword must be 'Preset' or 'Pat'")
+        return "Preset" if cleaned.lower() == "preset" else "Pat"
+
+
+class SetTransportsBody(BaseModel):
+    """Turn transports on/off while the service runs (omitted fields stay unchanged)."""
+
+    lan: bool | None = None
+    ble: bool | None = None
+    socket: bool | None = None
+
+    @model_validator(mode="after")
+    def require_one(self) -> SetTransportsBody:
+        if self.lan is None and self.ble is None and self.socket is None:
+            raise ValueError("Provide at least one of: lan, ble, socket.")
+        return self
+
+
+class BleAutoConnectBody(BaseModel):
+    """One-tap onboarding: scan, then connect everything that answers."""
+
+    timeout: float | None = Field(
+        default=None, ge=0.5, le=120.0, description="Scan duration; defaults to the service value."
+    )
+    addresses: list[str] | None = Field(
+        default=None,
+        description="Restrict to these BLE addresses; omit to connect every discovered device.",
+    )
+    include_registered: bool = Field(
+        default=True,
+        description="Also reconnect toys that are already registered but offline.",
+    )
+
+
 class BleConnectBody(BaseModel):
     address: str = Field(..., min_length=1, description="BLE address from scan.")
     toy_id: str | None = Field(

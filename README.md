@@ -15,9 +15,19 @@ pip install lovensepy
 Optional extras:
 
 ```bash
+pip install 'lovensepy[service]' # HTTP service + web control panel; run: lovensepy-service
 pip install 'lovensepy[mqtt]'   # Home Assistant MQTT bridge service + paho-mqtt; run: lovensepy-mqtt
 pip install 'lovensepy[ble]'    # Direct BLE (bleak, pick for examples)
 ```
+
+## No-code start: the web control panel
+
+```bash
+pip install 'lovensepy[service,ble]'
+lovensepy-service   # opens the panel in your browser
+```
+
+The service serves a browser control panel at **`/`** (OpenAPI docs move to **`/docs`**): Bluetooth scan and one-tap connect, a slider per motor, Lovense presets, a pattern editor, running sessions with countdowns, Game Mode and Lovense cloud setup. Toys are kept connected and reconnected for you. Scan the QR code in the header to open the same panel on a phone on the same Wi-Fi — the desktop and the phone drive the same toy. For a phone that is *not* on this Wi-Fi, turn on **Phone from anywhere** in Settings (or start with `LOVENSE_TUNNEL=1`) to publish a temporary `https://*.trycloudflare.com` link via `cloudflared`. Outside visitors must enter a 6-digit code printed in the service console before the panel opens. See [Web control panel](docs/web-ui.en.md).
 
 ## Docker Compose: Mosquitto + Home Assistant
 

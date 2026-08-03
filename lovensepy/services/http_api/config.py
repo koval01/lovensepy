@@ -1,4 +1,4 @@
-"""Configuration for :mod:`lovensepy.services.fastapi` (LAN + BLE HTTP server)."""
+"""Configuration for :mod:`lovensepy.services.http_api` (LAN + BLE + Socket HTTP service)."""
 
 from __future__ import annotations
 
@@ -27,6 +27,10 @@ def _ble_scan_prefix_from_env() -> str | None:
         return "LVS-"
     s = raw.strip()
     return None if s == "" else s
+
+
+def _csv_env(name: str) -> list[str]:
+    return [item.strip() for item in (os.environ.get(name) or "").split(",") if item.strip()]
 
 
 class ServiceConfig(BaseModel):
@@ -99,6 +103,96 @@ class ServiceConfig(BaseModel):
             "BLE mode: if true, pulse/wave/fireworks/earthquake use pattern stepping instead of "
             "UART Pat/Preset (for toys that ignore preset UART lines)."
         ),
+    )
+    ble_auto_reconnect: bool = Field(
+        default=True,
+        description=(
+            "BLE mode: background supervisor re-establishes GATT links for registered toys "
+            "after link loss (exponential backoff). Disable with LOVENSE_BLE_AUTO_RECONNECT=0."
+        ),
+    )
+    ble_auto_reconnect_interval_sec: float = Field(
+        default=5.0,
+        ge=1.0,
+        le=300.0,
+        description="Seconds between BLE supervisor rounds (reconnect + battery refresh checks).",
+    )
+    ble_battery_refresh_sec: float = Field(
+        default=120.0,
+        ge=10.0,
+        le=3600.0,
+        description="How often the BLE supervisor refreshes cached UART battery per toy.",
+    )
+
+    # --- Web UI / HTTP surface ---
+    webui_enabled: bool = Field(
+        default=True,
+        description=(
+            "Serve the bundled React control panel at '/' (OpenAPI docs move to '/docs'). "
+            "Disable with LOVENSE_WEBUI=0 to keep a docs-only service."
+        ),
+    )
+    cors_origins: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Extra allowed CORS origins (LOVENSE_CORS_ORIGINS, comma separated). "
+            "Use '*' to allow any origin — only do that on trusted networks."
+        ),
+    )
+    cors_allow_localhost: bool = Field(
+        default=True,
+        description=(
+            "Allow http(s)://localhost:*/127.0.0.1:*/[::1]:* origins so local dev servers "
+            "can call the API (LOVENSE_CORS_ALLOW_LOCALHOST=0 to disable)."
+        ),
+    )
+    state_cache_ttl_sec: float = Field(
+        default=2.0,
+        ge=0.0,
+        le=60.0,
+        description=(
+            "Toy-list cache TTL used by GET /state and the /ws event stream, so live status "
+            "polling does not hammer LAN/BLE transports. GET /toys is never cached."
+        ),
+    )
+    events_interval_sec: float = Field(
+        default=1.0,
+        ge=0.2,
+        le=30.0,
+        description="Seconds between /ws state pushes (identical snapshots are skipped).",
+    )
+    external_gate: bool = Field(
+        default=True,
+        description=(
+            "When a visitor arrives from outside the local network (Cloudflare tunnel, "
+            "public hostname, non-LAN client IP), require a 6-digit code printed in the "
+            "service console before serving the panel or API. Disable with LOVENSE_GATE=0."
+        ),
+    )
+    tunnel_enabled: bool = Field(
+        default=False,
+        description=(
+            "Start a Cloudflare quick tunnel (cloudflared) that publishes the control "
+            "panel on a random https://*.trycloudflare.com URL. Opt-in only: the URL "
+            "is public while the tunnel runs. Enable with LOVENSE_TUNNEL=1."
+        ),
+    )
+    tunnel_binary: str | None = Field(
+        default=None,
+        description="Optional path to the cloudflared binary (LOVENSE_CLOUDFLARED_BIN).",
+    )
+    listen_port: int | None = Field(
+        default=None,
+        ge=1,
+        le=65535,
+        description=(
+            "Port the HTTP service is listening on (set by the launcher / LOVENSE_PORT). "
+            "Used as the cloudflared upstream target."
+        ),
+    )
+    listen_host: str = Field(
+        default="127.0.0.1",
+        description="Host cloudflared should dial (always loopback; LOVENSE_TUNNEL_HOST).",
     )
 
     # --- Lovense Socket API (cloud) pairing + control ---
@@ -203,6 +297,20 @@ class ServiceConfig(BaseModel):
         )
         socket_qr_ack_id = (os.environ.get("LOVENSE_SOCKET_QR_ACK_ID") or "1").strip() or "1"
 
+        ble_auto_reconnect = _parse_bool_env(
+            os.environ.get("LOVENSE_BLE_AUTO_RECONNECT"), default=True
+        )
+        webui_enabled = _parse_bool_env(os.environ.get("LOVENSE_WEBUI"), default=True)
+        cors_allow_localhost = _parse_bool_env(
+            os.environ.get("LOVENSE_CORS_ALLOW_LOCALHOST"), default=True
+        )
+        tunnel_enabled = _parse_bool_env(os.environ.get("LOVENSE_TUNNEL"), default=False)
+        external_gate = _parse_bool_env(os.environ.get("LOVENSE_GATE"), default=True)
+        listen_port_raw = (os.environ.get("LOVENSE_PORT") or "").strip()
+        listen_port = int(listen_port_raw) if listen_port_raw else None
+        tunnel_binary = (os.environ.get("LOVENSE_CLOUDFLARED_BIN") or "").strip() or None
+        listen_host = (os.environ.get("LOVENSE_TUNNEL_HOST") or "127.0.0.1").strip() or "127.0.0.1"
+
         return cls(
             mode=mode,
             enable_lan=enable_lan,
@@ -221,6 +329,21 @@ class ServiceConfig(BaseModel):
             ),
             ble_preset_uart_keyword=ble_uart_raw,
             ble_preset_emulate_pattern=ble_preset_emulate_pattern,
+            ble_auto_reconnect=ble_auto_reconnect,
+            ble_auto_reconnect_interval_sec=float(
+                os.environ.get("LOVENSE_BLE_AUTO_RECONNECT_INTERVAL", "5")
+            ),
+            ble_battery_refresh_sec=float(os.environ.get("LOVENSE_BLE_BATTERY_REFRESH", "120")),
+            webui_enabled=webui_enabled,
+            cors_origins=_csv_env("LOVENSE_CORS_ORIGINS"),
+            cors_allow_localhost=cors_allow_localhost,
+            state_cache_ttl_sec=float(os.environ.get("LOVENSE_STATE_CACHE_TTL", "2")),
+            events_interval_sec=float(os.environ.get("LOVENSE_EVENTS_INTERVAL", "1")),
+            external_gate=external_gate,
+            tunnel_enabled=tunnel_enabled,
+            tunnel_binary=tunnel_binary,
+            listen_port=listen_port,
+            listen_host=listen_host,
             socket_developer_token=socket_developer_token,
             socket_uid=socket_uid,
             socket_platform=socket_platform,
@@ -263,6 +386,44 @@ class ServiceConfig(BaseModel):
             return None
         s = str(p).strip()
         return s if s else None
+
+    def public_summary(self) -> dict[str, Any]:
+        """Config view safe to return over HTTP (no developer token / uid secrets)."""
+        return {
+            "mode": self.mode,
+            "app_name": self.app_name,
+            "session_max_sec": self.session_max_sec,
+            "lan": {"ip": self.lan_ip, "port": self.lan_port, "enabled": self.enable_lan},
+            "ble": {
+                "enabled": self.enable_ble,
+                "scan_timeout_sec": self.ble_scan_timeout,
+                "scan_name_prefix": self.ble_scan_name_prefix,
+                "advertisement_monitor": self.ble_advertisement_monitor,
+                "advertisement_monitor_interval_sec": self.ble_monitor_interval_sec,
+                "preset_uart_keyword": self.ble_preset_uart_keyword,
+                "preset_emulate_pattern": self.ble_preset_emulate_pattern,
+                "auto_reconnect": self.ble_auto_reconnect,
+                "auto_reconnect_interval_sec": self.ble_auto_reconnect_interval_sec,
+                "battery_refresh_sec": self.ble_battery_refresh_sec,
+            },
+            "socket": {
+                "enabled": self.enable_socket,
+                "platform": self.socket_platform,
+                "uname": self.socket_uname,
+                "has_developer_token": bool((self.socket_developer_token or "").strip()),
+                "has_uid": bool((self.socket_uid or "").strip()),
+                "use_local_commands": self.socket_use_local_commands,
+                "auto_request_qr": self.socket_auto_request_qr,
+            },
+            "webui_enabled": self.webui_enabled,
+            "events_interval_sec": self.events_interval_sec,
+            "tunnel": {
+                "enabled": self.tunnel_enabled,
+                "listen_port": self.listen_port,
+                "listen_host": self.listen_host,
+            },
+            "external_gate": self.external_gate,
+        }
 
     def ble_connect_client_kwargs(self) -> dict[str, Any]:
         """Keyword args merged into BleDirectClient for ``POST /ble/connect``.

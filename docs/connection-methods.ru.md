@@ -39,7 +39,7 @@
 | Events API | `ToyEventsClient` | access (appName) | Порт 20011. Только Lovense Remote |
 | Home Assistant | `HAMqttBridge` | MQTT-брокер + IP LAN Game Mode, **или** MQTT + BLE (`transport="ble"`) | MQTT Discovery; команды → `AsyncLANClient` или `BleDirectHub`; Toy Events только в LAN-режиме |
 | Прямой BLE | `BleDirectHubSync` / `BleDirectHub` / `BleDirectClient` | BLE-адрес (периферия) | Без Lovense Remote на пути; UART **по возможности**; часто **эксклюзивно** с BLE приложения |
-| Пример REST (панели) | `lovensepy.services.fastapi` (extra `[service]`) | `LOVENSE_SERVICE_MODE=lan` + IP Game Mode или `=ble` + скан/подключение | FastAPI + OpenAPI; планировщик asyncio; бэкенд LAN или BLE |
+| HTTP-сервис и веб-панель | `lovensepy.services.http_api` (extra `[service]`) | `LOVENSE_SERVICE_MODE=lan` + IP Game Mode, `=ble`, `=socket` или `=hybrid`; панель умеет настраивать это на ходу | [Панель управления](web-ui.md) на `/`, OpenAPI на `/docs`, `WS /ws`; планировщик asyncio; бэкенды LAN, BLE и Socket |
 
 ## Как идёт трафик
 

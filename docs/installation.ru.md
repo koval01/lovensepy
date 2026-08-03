@@ -18,7 +18,7 @@
 - **Toy Events API**: события в реальном времени (toy-list, button-down, function-strength-changed и т.д.)
 - **MQTT-мост Home Assistant** (опционально): MQTT Discovery + управление по LAN или BLE — сервис `lovensepy.services.mqtt_bridge` / CLI `lovensepy-mqtt` (`pip install 'lovensepy[mqtt]'`, для BLE добавьте `[ble]`)
 - **Прямой BLE** (опционально): `BleDirectHubSync` / `BleDirectHub` / `BleDirectClient` — см. [Прямой BLE](direct-ble.md)
-- **Сервис FastAPI** (`lovensepy.services.fastapi`, опциональный extra `[service]`): HTTP REST + OpenAPI `/docs` для Game Mode или BLE — см. [руководство FastAPI](tutorials/fastapi-lan-rest.md). Пример-обёртка: `examples/fastapi_lan_api.py`.
+- **HTTP-сервис и веб-панель** (`lovensepy.services.http_api`, опциональный extra `[service]`): панель в браузере на `/`, HTTP REST и OpenAPI на `/docs`, живое состояние по `WS /ws`, для Game Mode, BLE или обоих — см. [Веб-панель управления](web-ui.md) и [руководство FastAPI](tutorials/fastapi-lan-rest.md). Пример-обёртка: `examples/fastapi_lan_api.py`.
 
 ## Установка пакета {: #install}
 

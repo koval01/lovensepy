@@ -260,6 +260,51 @@ class BleDirectHub(LovenseAsyncControlClient):
         for tid in list(self._toys.keys()):
             await self.remove_toy(tid)
 
+    def registry_rows(self) -> list[dict[str, Any]]:
+        """Registration + link state per toy (no BLE traffic).
+
+        Cheap enough for status polling / dashboards: reports the BLE address, whether
+        the GATT link is up, and the last known UART metadata (firmware, model letter,
+        features, battery) captured by :meth:`enrich_toy_from_uart` /
+        :meth:`refresh_battery`.
+        """
+        rows: list[dict[str, Any]] = []
+        for tid in sorted(self._toys):
+            ent = self._toys[tid]
+            rows.append(
+                {
+                    "toy_id": tid,
+                    "address": ent.client.address,
+                    "connected": ent.client.is_connected,
+                    "name": ent.display_name,
+                    "nickName": _display_name_from_entry(ent),
+                    "toy_type": ent.toy_type_slug,
+                    "firmware": ent.firmware,
+                    "model_letter": ent.model_letter,
+                    "features": list(ent.suggested_features),
+                    "battery": ent.battery_percent,
+                }
+            )
+        return rows
+
+    async def refresh_battery(self, toy_id: str) -> int | None:
+        """Query UART battery for one connected toy and cache it on the hub entry.
+
+        Returns the percentage, or ``None`` when the toy is unknown, offline, or the
+        reply cannot be parsed. Never raises for BLE/UART failures.
+        """
+        ent = self._toys.get(str(toy_id).strip())
+        if ent is None or not ent.client.is_connected:
+            return None
+        try:
+            battery = await ent.client.fetch_battery_percent()
+        except Exception:
+            _logger.debug("Battery refresh failed for toy %r", toy_id, exc_info=True)
+            return None
+        if isinstance(battery, int):
+            ent.battery_percent = battery
+        return ent.battery_percent
+
     async def enrich_toy_from_uart(
         self,
         toy_id: str,
@@ -681,7 +726,12 @@ class BleDirectHub(LovenseAsyncControlClient):
         *,
         query_battery: bool = True,
     ) -> GetToysResponse:
-        """Synthetic ``GetToys`` from registered toys. Optionally queries UART battery per toy."""
+        """Synthetic ``GetToys`` from registered toys. Optionally queries UART battery per toy.
+
+        With ``query_battery=False`` no UART traffic happens and the last known battery
+        (from :meth:`enrich_toy_from_uart` / :meth:`refresh_battery`) is reported instead,
+        which keeps frequent status polling cheap.
+        """
         if not self._toys:
             return GetToysResponse.model_validate({"data": {"toys": []}})
         toy_rows: list[dict[str, Any]] = []
@@ -689,7 +739,7 @@ class BleDirectHub(LovenseAsyncControlClient):
             ent = self._toys[tid]
             c = ent.client
             connected = c.is_connected
-            battery: int | None = None
+            battery: int | None = ent.battery_percent
             if query_battery and connected:
                 try:
                     battery = await c.fetch_battery_percent()
@@ -697,6 +747,8 @@ class BleDirectHub(LovenseAsyncControlClient):
                     battery = None
                 if battery is None and ent.battery_percent is not None:
                     battery = ent.battery_percent
+                elif isinstance(battery, int):
+                    ent.battery_percent = battery
             row: dict[str, Any] = {
                 "id": tid,
                 "name": ent.display_name,

@@ -4,6 +4,69 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.1.5] - 2026-08-04
+
+### Added
+
+- **Web control panel** served at **``/``** by the HTTP service: per-motor sliders, Lovense presets, pattern editor,
+  device pulsing, running sessions with countdowns, Bluetooth discovery with one-tap **connect everything**, Game Mode
+  and Socket API setup, and a QR code that opens the same panel on a phone on the same Wi-Fi. React 19 + TypeScript +
+  Vite with Tailwind CSS v4 and shadcn/ui, built into ``lovensepy/services/http_api/webui_dist/`` and shipped in the wheel.
+  Disable with ``LOVENSE_WEBUI=0``. See **[Web control panel](docs/web-ui.en.md)**.
+- **``lovensepy-service``** console script (extra ``[service]``): starts the service on a free port and opens the panel.
+- ``GET /state`` — one aggregated snapshot (toys across transports, scheduler rows, BLE discovery and supervisor,
+  Socket pairing, capabilities, configuration) with a short toy-list cache (``LOVENSE_STATE_CACHE_TTL``, ``?fresh=true``
+  to bypass), and ``WS /ws`` pushing that snapshot on change with a heartbeat.
+- **BLE automation:** background supervisor keeps registered toys connected with per-toy exponential backoff and
+  refreshes cached battery (``LOVENSE_BLE_AUTO_RECONNECT``, ``LOVENSE_BLE_AUTO_RECONNECT_INTERVAL``,
+  ``LOVENSE_BLE_BATTERY_REFRESH``), plus ``POST /ble/connect/auto``, ``POST /ble/reconnect/{toy_id}`` and
+  ``GET /ble/toys``.
+- **Runtime configuration** without a restart: ``GET /config``, ``POST /config/lan-ip``, ``POST /config/socket``,
+  ``POST /config/ble``, ``POST /config/transports``; ``GET /system/network`` lists URLs that reach the service.
+- CORS control for separate front-end origins: ``LOVENSE_CORS_ORIGINS``, ``LOVENSE_CORS_ALLOW_LOCALHOST``
+  (localhost-only by default).
+- **Managed Cloudflare quick tunnel:** ``LOVENSE_TUNNEL=1`` (or Settings → Phone from anywhere) spawns
+  ``cloudflared tunnel --url http://127.0.0.1:<port>``, auto-restarts it, and surfaces the
+  ``https://*.trycloudflare.com`` URL in ``GET /system/network``, ``GET /state`` and the phone QR dialog
+  (``POST /system/tunnel`` to start/stop). Requires ``cloudflared`` on ``PATH`` or ``LOVENSE_CLOUDFLARED_BIN``.
+- **External access gate:** visitors outside the local network (tunnel / public hostname / public
+  client IP) wait for host approval or enter a 6-digit code (``LOVENSE_GATE=0`` to disable).
+  The host panel shows **Allow this user to connect?** for waiting visitors and displays the live
+  access code in the phone-share dialog; remotes see a waiting screen until approved.
+  LAN / loopback stays open.
+- **Host / remote presence:** local browsers are *hosts*; tunnel visitors (after the gate) are
+  *remotes*. Hosts see each remote controller’s online state, activity, device/browser, IP and
+  Cloudflare country (``CF-IPCountry``), plus a true browser↔browser round-trip measured by an
+  echo relayed over ``/ws`` (not ICMP). Remotes keep full toy control (levels, battery, running
+  sessions) but never receive other remotes’ network details. SPA requests send the gate cookie
+  (``credentials: same-origin``) and an ``X-LovensePy-Client`` id so REST activity is attributed.
+- **Control-only tunnel access:** Cloudflare / public visitors may drive toys (``/command/*``,
+  battery and sessions via ``/state``) but receive HTTP **403** for settings, BLE pairing,
+  Socket QR, tunnel start/stop, network QR, and API docs. ``/state`` is redacted for remotes
+  (no tunnel URL, pairing material, or mutable config). The web UI hides Connect / Settings and
+  the phone-share dialog for remotes.
+
+### Fixed
+
+- **Slider / Function latency:** indefinite motor holds (``time=0``) now update the running level in
+  place instead of cancelling the slot (stop + optional Battery UART + re-Function) on every tick.
+  Command-path ``GetToys`` skips battery queries, Function writes use ``wait_for_completion=False``,
+  and the web UI no longer force-refreshes ``/state`` after each slider write.
+
+### Changed
+
+- **OpenAPI docs moved from ``/`` to ``/docs``** (ReDoc at ``/redoc``, schema at ``/openapi.json``); ``/`` is the panel.
+- The service **starts with unusable transports** instead of failing: affected endpoints answer **409** until the
+  transport is configured via ``/config/*`` or the panel.
+- ``lovensepy.services.http_api`` is the implementation module; ``lovensepy.services.fastapi`` remains as an import
+  shim. The monolithic ``app.py`` is split into routers plus a ``ServiceRuntime`` state container.
+- ``GET /toys`` on BLE issues one UART battery round-trip per device only when asked; dashboards should poll ``/state``.
+- **``WS /ws`` wire format is binary protobuf** (``lovensepy.ws.ServerMessage`` /
+  ``ClientMessage``); REST ``/state`` stays JSON. The large state snapshot is UTF-8 JSON
+  inside the protobuf envelope. Requires ``protobuf`` via ``pip install 'lovensepy[service]'``.
+
 ## [1.1.4] - 2026-03-30
 
 ### Added
@@ -167,7 +230,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial changelog entry for this release line; see Git history for earlier changes.
 
-[Unreleased]: https://github.com/koval01/lovensepy/compare/v1.1.4...HEAD
+[Unreleased]: https://github.com/koval01/lovensepy/compare/v1.1.5...HEAD
+[1.1.5]: https://github.com/koval01/lovensepy/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/koval01/lovensepy/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/koval01/lovensepy/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/koval01/lovensepy/compare/v1.1.1...v1.1.2

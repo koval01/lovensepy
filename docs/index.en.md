@@ -5,6 +5,7 @@ Long-form guides, API tables, and reference material for [LovensePy](https://git
 ## Start here
 
 - [Installation and setup](installation.md) — prerequisites, extras (`[mqtt]`, `[ble]`), first Game Mode script
+- [Web control panel](web-ui.md) — run the HTTP service and control toys from a browser or a phone, no code
 - [Connection methods and architecture](connection-methods.md) — which client to use, traffic paths, diagram
 - [Direct BLE](direct-ble.md) — `BleDirectHubSync` quick start (LAN-like), async hub, notes
 

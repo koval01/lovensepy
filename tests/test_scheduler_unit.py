@@ -22,6 +22,100 @@ def _mock_backend() -> MagicMock:
     return backend
 
 
+def test_scheduler_indefinite_hold_updates_in_place_without_cancel_dance() -> None:
+    """Slider ticks must not stop/re-query on every level change."""
+
+    async def _run() -> None:
+        backend = _mock_backend()
+        scheduler = ControlScheduler(backend)
+        try:
+            first = await scheduler.schedule_function(
+                "toy-a",
+                {Actions.VIBRATE: 4},
+                0,
+                stop_previous=False,
+                loop_on_time=None,
+                loop_off_time=None,
+            )
+            task_id = first["scheduled"][0]["task_id"]
+            # Let the hold task apply the first snapshot.
+            await asyncio.sleep(0)
+            backend.function_request.reset_mock()
+            backend.get_toys.reset_mock()
+            backend.stop.reset_mock()
+
+            second = await scheduler.schedule_function(
+                "toy-a",
+                {Actions.VIBRATE: 12},
+                0,
+                stop_previous=False,
+                loop_on_time=None,
+                loop_off_time=None,
+            )
+            assert second["scheduled"][0]["task_id"] == task_id
+            assert second["scheduled"][0]["level"] == 12.0
+
+            # One Function write for the new level — no GetToys / stop burst.
+            assert backend.function_request.await_count >= 1
+            for call in backend.function_request.await_args_list:
+                assert call.args[0].get("Vibrate") == 12.0
+                assert call.kwargs.get("wait_for_completion") is False
+            backend.get_toys.assert_not_awaited()
+            backend.stop.assert_not_awaited()
+
+            rows = await scheduler.list_tasks()
+            assert len(rows) == 1
+            assert rows[0]["level"] == 12.0
+        finally:
+            await scheduler.shutdown()
+
+    asyncio.run(_run())
+
+
+def test_scheduler_rapid_slider_ticks_never_send_stop() -> None:
+    """Dragging a slider must overwrite levels continuously — never Function(0) between ticks."""
+
+    async def _run() -> None:
+        backend = _mock_backend()
+        scheduler = ControlScheduler(backend)
+        try:
+            await scheduler.schedule_function(
+                "toy-a",
+                {Actions.VIBRATE: 1},
+                0,
+                stop_previous=False,
+                loop_on_time=None,
+                loop_off_time=None,
+            )
+            await asyncio.sleep(0)
+            backend.function_request.reset_mock()
+            backend.stop.reset_mock()
+
+            task_ids: list[str] = []
+            for level in range(2, 16):
+                result = await scheduler.schedule_function(
+                    "toy-a",
+                    {Actions.VIBRATE: float(level)},
+                    0,
+                    stop_previous=False,
+                    loop_on_time=None,
+                    loop_off_time=None,
+                )
+                task_ids.append(result["scheduled"][0]["task_id"])
+
+            assert len(set(task_ids)) == 1, "continuous holds must keep one task id"
+            backend.stop.assert_not_awaited()
+            for call in backend.function_request.await_args_list:
+                actions = call.args[0]
+                assert actions.get("Vibrate", 1) > 0, actions
+            rows = await scheduler.list_tasks()
+            assert rows[0]["level"] == 15.0
+        finally:
+            await scheduler.shutdown()
+
+    asyncio.run(_run())
+
+
 def test_scheduler_concurrent_schedule_same_toy() -> None:
     async def _run() -> None:
         scheduler = ControlScheduler(_mock_backend())
