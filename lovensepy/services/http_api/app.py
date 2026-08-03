@@ -61,6 +61,8 @@ def _install_cors(fastapi_app: FastAPI, cfg: ServiceConfig) -> None:
     origins = [origin for origin in cfg.cors_origins if origin != "*"]
     fastapi_app.add_middleware(
         CORSMiddleware,
+        # Wildcard only when the operator explicitly listed "*" in cors_origins.
+        # nosemgrep: python.fastapi.security.wildcard-cors.wildcard-cors
         allow_origins=["*"] if allow_all else origins,
         allow_origin_regex=None
         if allow_all

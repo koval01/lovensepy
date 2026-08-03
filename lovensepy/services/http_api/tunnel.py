@@ -244,7 +244,8 @@ class CloudflaredTunnel:
         self._state.note(f"spawned pid={proc.pid} → {local_url}")
         self._changed()
 
-        assert proc.stdout is not None
+        if proc.stdout is None:
+            raise RuntimeError("cloudflared stdout pipe missing")
         try:
             while True:
                 line_b = await proc.stdout.readline()

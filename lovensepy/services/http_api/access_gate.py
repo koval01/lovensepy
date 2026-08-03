@@ -263,7 +263,8 @@ class AccessGate:
                 code=code, expires_mono=now + self.code_ttl_sec, printed=False
             )
             pending = self._pending
-        assert pending is not None
+        if pending is None:
+            raise RuntimeError("access code state missing")
         if not pending.printed or force_new:
             self._announce(pending.code)
             pending.printed = True

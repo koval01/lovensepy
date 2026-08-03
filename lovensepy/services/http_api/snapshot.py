@@ -228,7 +228,7 @@ def redact_state_for_remote(state: dict[str, Any]) -> dict[str, Any]:
             "enabled": bool((state.get("transports") or {}).get("socket")),
             "platform": None,
             "uname": None,
-            "has_developer_token": False,
+            "has_developer_token": False,  # nosec B105
             "has_uid": False,
             "use_local_commands": False,
             "auto_request_qr": False,

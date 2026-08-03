@@ -216,7 +216,7 @@ class PresenceHub:
                     )
                 )
                 sent += 1
-            except Exception:  # pylint: disable=broad-exception-caught
+            except Exception:  # nosec B112  # pylint: disable=broad-exception-caught
                 continue
         return sent
 
@@ -314,6 +314,6 @@ def install_presence_activity(app: Any, runtime: Any) -> None:
             label = activity_for_path(request.url.path, request.method)
             if label:
                 await runtime.presence.mark_http_activity(client_id, label)
-        except Exception:  # pylint: disable=broad-exception-caught
+        except Exception:  # nosec B110  # pylint: disable=broad-exception-caught
             pass
         return response

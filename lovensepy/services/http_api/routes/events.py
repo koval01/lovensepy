@@ -91,7 +91,7 @@ async def _read_commands(
             raw = await socket.receive_bytes()
             try:
                 message = ws_codec.decode_client(raw)
-            except Exception:  # pylint: disable=broad-exception-caught
+            except Exception:  # nosec B112  # pylint: disable=broad-exception-caught
                 continue
             kind = message.WhichOneof("body")
             if kind == "refresh":
