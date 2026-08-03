@@ -11,7 +11,7 @@ license = {text = "Apache-2.0"}
 authors = [{name = "LovensePy contributors", email = "git@koval-dev.org"}]
 requires-python = ">=3.12"
 dependencies = [
-    "aiohttp>=3.13.3",
+    "aiohttp>=3.14.3",
     "pydantic>=2.12.5",
 ]
 keywords = ["lovense", "api", "iot", "teledildonics", "asyncio", "sdk", "mqtt", "home-assistant", "ble"]
