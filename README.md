@@ -42,7 +42,7 @@ client = LANClient("MyApp", "192.168.1.100", port=20011)
 client.function_request({Actions.VIBRATE: 10}, time=3)
 ```
 
-Enable Game Mode in Lovense Remote, use the app host’s IP, and pick the right port (e.g. **20011** for Remote, **34567** for Connect). Full setup, tutorials, and API tables are on **[GitHub Pages](https://lovensepy.koval-dev.org/)** (or browse the [docs](docs/index.en.md) folder in the repository).
+Enable Game Mode in Lovense Remote, use the app host’s IP, and pick the right port (e.g. **20011** for Remote, **34567** for Connect). Full setup, tutorials, and API tables are on **[GitHub Pages](https://koval01.github.io/lovensepy/)** (or browse the [docs](docs/index.en.md) folder in the repository).
 
 For **`async`/`await`** code, **`AsyncLANClient`**, **`AsyncServerClient`**, **`BleDirectHub`**, and **`BleDirectClient`** all subclass **`LovenseAsyncControlClient`**: same control methods so you can switch transport by changing only construction. See [Connection methods](docs/connection-methods.en.md#same-control-code-different-transport) and the [API reference](docs/api-reference.en.md#lovenseasynccontrolclient).
 
@@ -93,7 +93,7 @@ flowchart TB
 
 ## Documentation and official APIs
 
-- **Project docs (site):** [lovensepy.koval-dev.org](https://lovensepy.koval-dev.org/) — **source:** [docs/index.en.md](docs/index.en.md) (Russian: [index.ru.md](docs/index.ru.md))
+- **Project docs (site):** [https://koval01.github.io/lovensepy/](https://koval01.github.io/lovensepy/) — **source:** [docs/index.en.md](docs/index.en.md) (Russian: [index.ru.md](docs/index.ru.md))
 - [Lovense Standard API](https://developer.lovense.com/docs/standard-solutions/standard-api.html)
 - [Lovense Socket API](https://developer.lovense.com/docs/standard-solutions/socket-api.html)
 - [Toy Events API](https://developer.lovense.com/docs/standard-solutions/toy-events-api.html)
